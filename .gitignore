@@ -1,0 +1,15 @@
+node_modules/
+dist/
+__pycache__/
+*.py[cod]
+.DS_Store
+Thumbs.db
+*.log
+events.jsonl*
+events.lock
+events.seq
+host-id
+.env
+.env.*
+!.env.example
+/ai-office-live.png
