@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## 0.1.1 — 2026-08-27
+
+- Fixed CI on clean runners by building static hosting artifacts before the Sites packaging tests.
+
 ## 0.1.0 — 2026-08-27
 
 - Added the top-down multi-project office dashboard and activity timeline.
