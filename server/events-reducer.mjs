@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 const QUIET_AFTER_MS = 2_000;
 const STALE_AFTER_MS = 5 * 60 * 1_000;
 const EMPLOYEE_HANDOFF_MS = 15_000;
+const EMPLOYEE_INACTIVE_MS = 30 * 60 * 1_000;
 const ACTIVE_STATUSES = new Set(["working", "compacting", "stopping"]);
 const RESTART_EVENT_TYPES = new Set(["session.started", "employee.started", "employee.spawned", "employee.work.started"]);
 
@@ -154,8 +155,8 @@ function activityMessage(event, employee) {
   }
 }
 
-function projectEnded(employees) {
-  const mainEmployees = employees.filter((employee) => employee.kind === "main");
+function projectEnded(employees, nowMs) {
+  const mainEmployees = employees.filter((employee) => employee.kind === "main" && (employee.terminalAt || nowMs - Date.parse(employee.lastActivityAt) < EMPLOYEE_INACTIVE_MS));
   return mainEmployees.length > 0 && mainEmployees.every((employee) => employee.status === "offline");
 }
 
@@ -169,8 +170,8 @@ function projectStatus(employees, ended) {
 }
 
 function isVisibleEmployee(employee, nowMs) {
-  if (!employee.terminalAt) return true;
-  return nowMs - Date.parse(employee.terminalAt) < EMPLOYEE_HANDOFF_MS;
+  if (employee.terminalAt) return nowMs - Date.parse(employee.terminalAt) < EMPLOYEE_HANDOFF_MS;
+  return nowMs - Date.parse(employee.lastActivityAt) < EMPLOYEE_INACTIVE_MS;
 }
 
 function isTerminalEvent(event) {
@@ -233,7 +234,7 @@ export function reduceEvents(rawEvents, { now = new Date() } = {}) {
 
   const projectSnapshots = [...projects.values()].map((project) => {
     const allEmployees = [...project.employees.values()];
-    const ended = projectEnded(allEmployees);
+    const ended = projectEnded(allEmployees, nowMs);
     let employees = allEmployees.filter((employee) => isVisibleEmployee(employee, nowMs)).sort((a, b) => Date.parse(b.lastActivityAt) - Date.parse(a.lastActivityAt));
     if (employees.filter((employee) => ACTIVE_STATUSES.has(employee.status)).length >= 2) {
       employees = employees.map((employee) => ACTIVE_STATUSES.has(employee.status) ? { ...employee, status: "meeting" } : employee);
@@ -253,4 +254,4 @@ export function reduceEvents(rawEvents, { now = new Date() } = {}) {
   };
 }
 
-export { EMPLOYEE_HANDOFF_MS, QUIET_AFTER_MS, STALE_AFTER_MS };
+export { EMPLOYEE_HANDOFF_MS, EMPLOYEE_INACTIVE_MS, QUIET_AFTER_MS, STALE_AFTER_MS };
