@@ -31,3 +31,9 @@ test("removes missing projects and moves a resumed project before ended projects
   const incoming = [project("gamma"), project("beta", { ended: true })];
   assert.deepEqual(stabilizeProjectOrder(previous, incoming).map((item) => item.id), ["gamma", "beta"]);
 });
+
+test("replaces demo rooms with live projects even when the project count is unchanged", () => {
+  const previous = [project("demo-office"), project("demo-research")];
+  const incoming = [project("live-alpha"), project("live-beta")];
+  assert.deepEqual(stabilizeProjectOrder(previous, incoming).map((item) => item.id), ["live-alpha", "live-beta"]);
+});

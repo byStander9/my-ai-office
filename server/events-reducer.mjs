@@ -168,7 +168,8 @@ export function reduceEvents(rawEvents, { now = new Date() } = {}) {
     employee.name = identity.name;
     employee.role = identity.role;
     employee.kind = identity.kind;
-    employee.status = statusFor(event, nowMs);
+    const nextStatus = statusFor(event, nowMs);
+    employee.status = employee.status === "offline" && event.type !== "session.started" ? "offline" : nextStatus;
     employee.lastActivityAt = event.at;
     employee.tool = event.tool;
     project.employees.set(identity.id, employee);

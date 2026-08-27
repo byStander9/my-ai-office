@@ -100,6 +100,36 @@ test("marks a project ended only when all main sessions are offline", () => {
   assert.equal(ended.projects[0].status, "종료");
 });
 
+test("ends a multi-session project only after every main session ends", () => {
+  const snapshot = reduceEvents([
+    event({ id: "session-a-start", type: "session.started", status: "online", sessionId: "session-a", appendSeq: 1 }),
+    event({ id: "session-b-start", type: "session.started", status: "online", sessionId: "session-b", appendSeq: 2 }),
+    event({ id: "session-a-end", type: "session.ended", status: "offline", sessionId: "session-a", appendSeq: 3 }),
+    event({ id: "session-b-end", type: "session.ended", status: "offline", sessionId: "session-b", appendSeq: 4 }),
+  ], { now: new Date("2026-08-26T06:00:01.000Z") });
+  assert.equal(snapshot.projects[0].ended, true);
+});
+
+test("keeps an ended session offline when a delayed tool event arrives", () => {
+  const snapshot = reduceEvents([
+    event({ id: "session-start", type: "session.started", status: "online", sessionId: "session-a", appendSeq: 1 }),
+    event({ id: "session-end", type: "session.ended", status: "offline", sessionId: "session-a", appendSeq: 2 }),
+    event({ id: "late-tool", type: "employee.tool.completed", status: "working", sessionId: "session-a", appendSeq: 3 }),
+  ], { now: new Date("2026-08-26T06:00:01.000Z") });
+  assert.equal(snapshot.projects[0].ended, true);
+  assert.equal(snapshot.projects[0].employees[0].status, "offline");
+});
+
+test("resumes an ended project when a new main session starts", () => {
+  const snapshot = reduceEvents([
+    event({ id: "old-start", type: "session.started", status: "online", sessionId: "session-a", appendSeq: 1 }),
+    event({ id: "old-end", type: "session.ended", status: "offline", sessionId: "session-a", appendSeq: 2 }),
+    event({ id: "new-start", type: "session.started", status: "online", sessionId: "session-b", appendSeq: 3 }),
+  ], { now: new Date("2026-08-26T06:00:01.000Z") });
+  assert.equal(snapshot.projects[0].ended, false);
+  assert.equal(snapshot.projects[0].status, "대기");
+});
+
 test("returns demo mode only when there are no valid events", () => {
   const demo = reduceEvents([]);
   assert.equal(demo.mode, "demo");
