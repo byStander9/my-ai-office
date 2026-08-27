@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { EMPLOYEE_HANDOFF_MS, reduceEvents, sanitizeEvent } from "../server/events-reducer.mjs";
+import { EMPLOYEE_HANDOFF_MS, EMPLOYEE_INACTIVE_MS, reduceEvents, sanitizeEvent } from "../server/events-reducer.mjs";
 
 function event(overrides = {}) {
   return {
@@ -113,9 +113,36 @@ test("shows the same employee again only after an explicit restart event", () =>
   assert.equal(snapshot.projects[0].employees[0].status, "working");
 });
 
+test("hides an employee after thirty minutes without activity while preserving activity history", () => {
+  const events = [event({ id: "orphan", type: "employee.started", status: "working", employeeId: "agent-orphan", employeeRole: "explorer", appendSeq: 1 })];
+  const beforeCleanup = reduceEvents(events, { now: new Date(Date.parse("2026-08-26T06:00:00.000Z") + EMPLOYEE_INACTIVE_MS - 1) });
+  const afterCleanup = reduceEvents(events, { now: new Date(Date.parse("2026-08-26T06:00:00.000Z") + EMPLOYEE_INACTIVE_MS) });
+  assert.equal(beforeCleanup.projects[0].employees.length, 1);
+  assert.equal(afterCleanup.projects[0].employees.length, 0);
+  assert.equal(afterCleanup.events[0].employeeName, "코드 탐색 담당");
+});
+
+test("ignores an inactive orphan main session when a current main session has ended", () => {
+  const snapshot = reduceEvents([
+    event({ id: "orphan-start", type: "session.started", status: "online", sessionId: "session-orphan", appendSeq: 1 }),
+    event({ id: "current-start", at: "2026-08-26T06:40:00.000Z", type: "session.started", status: "online", sessionId: "session-current", appendSeq: 2 }),
+    event({ id: "current-end", at: "2026-08-26T06:40:01.000Z", type: "session.ended", status: "offline", sessionId: "session-current", appendSeq: 3 }),
+  ], { now: new Date("2026-08-26T06:40:02.000Z") });
+  assert.equal(snapshot.projects[0].ended, true);
+  assert.equal(snapshot.projects[0].status, "종료");
+  assert.equal(snapshot.projects[0].employees.length, 1);
+
+  const orphanOnly = reduceEvents([
+    event({ id: "orphan-start", type: "session.started", status: "online", sessionId: "session-orphan", appendSeq: 1 }),
+  ], { now: new Date("2026-08-26T06:40:02.000Z") });
+  assert.equal(orphanOnly.projects[0].ended, false);
+  assert.equal(orphanOnly.projects[0].status, "오프라인");
+});
+
 test("opaque IDs are stable for the same raw identifiers", () => {
-  const first = reduceEvents([event({ id: "stable-event", employeeId: "stable-employee", employeeRole: "builder" })]);
-  const second = reduceEvents([event({ id: "stable-event", employeeId: "stable-employee", employeeRole: "builder" })]);
+  const options = { now: new Date("2026-08-26T06:00:01.000Z") };
+  const first = reduceEvents([event({ id: "stable-event", employeeId: "stable-employee", employeeRole: "builder" })], options);
+  const second = reduceEvents([event({ id: "stable-event", employeeId: "stable-employee", employeeRole: "builder" })], options);
   assert.equal(first.events[0].id, second.events[0].id);
   assert.equal(first.events[0].employeeId, second.events[0].employeeId);
   assert.equal(first.projects[0].employees[0].id, first.events[0].employeeId);
