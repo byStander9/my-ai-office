@@ -25,7 +25,7 @@
     "start:office": "node server/office-server.mjs",
     "preview": "vite preview",
     "test": "npm run test:office && npm run test:sites",
-    "test:office": "node --test tests/event-reducer.test.mjs tests/event-sink.test.mjs tests/hook-config.test.mjs tests/office-server.test.mjs",
+    "test:office": "node --test tests/event-reducer.test.mjs tests/event-sink.test.mjs tests/hook-config.test.mjs tests/office-server.test.mjs tests/project-order.test.mjs",
     "test:sites": "npm run build && node --test tests/sites-worker.test.mjs"
   },
   "dependencies": {

@@ -84,6 +84,22 @@ test("groups two active employees in the same project into a meeting", () => {
   assert.equal(statuses.office_reviewer, "waiting_approval");
 });
 
+test("marks a project ended only when all main sessions are offline", () => {
+  const snapshot = reduceEvents([
+    event({ id: "session-a-start", type: "session.started", status: "online", sessionId: "session-a", appendSeq: 1 }),
+    event({ id: "session-b-start", type: "session.started", status: "online", sessionId: "session-b", appendSeq: 2 }),
+    event({ id: "session-a-end", type: "session.ended", status: "offline", sessionId: "session-a", appendSeq: 3 }),
+  ], { now: new Date("2026-08-26T06:00:01.000Z") });
+  assert.equal(snapshot.projects[0].ended, false);
+
+  const ended = reduceEvents([
+    event({ id: "session-a-start", type: "session.started", status: "online", sessionId: "session-a", appendSeq: 1 }),
+    event({ id: "session-a-end", type: "session.ended", status: "offline", sessionId: "session-a", appendSeq: 2 }),
+  ], { now: new Date("2026-08-26T06:00:01.000Z") });
+  assert.equal(ended.projects[0].ended, true);
+  assert.equal(ended.projects[0].status, "종료");
+});
+
 test("returns demo mode only when there are no valid events", () => {
   const demo = reduceEvents([]);
   assert.equal(demo.mode, "demo");

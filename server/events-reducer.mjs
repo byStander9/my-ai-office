@@ -129,7 +129,13 @@ function activityMessage(event, employee) {
   }
 }
 
-function projectStatus(employees) {
+function projectEnded(employees) {
+  const mainEmployees = employees.filter((employee) => employee.kind === "main");
+  return mainEmployees.length > 0 && mainEmployees.every((employee) => employee.status === "offline");
+}
+
+function projectStatus(employees, ended) {
+  if (ended) return "종료";
   const statuses = new Set(employees.map((employee) => employee.status));
   if (statuses.has("waiting_approval")) return "승인 대기";
   if (["working", "compacting", "stopping", "meeting"].some((status) => statuses.has(status))) return "작업 중";
@@ -186,7 +192,8 @@ export function reduceEvents(rawEvents, { now = new Date() } = {}) {
       employees = employees.map((employee) => ACTIVE_STATUSES.has(employee.status) ? { ...employee, status: "meeting" } : employee);
     }
     employees = employees.map((employee) => ({ ...employee, freshness }));
-    return { key: project.key, name: project.name, status: projectStatus(employees), freshness, lastActivityAt: project.lastActivityAt, employees };
+    const ended = projectEnded(employees);
+    return { key: project.key, name: project.name, status: projectStatus(employees, ended), ended, freshness, lastActivityAt: project.lastActivityAt, employees };
   }).sort((a, b) => Date.parse(b.lastActivityAt) - Date.parse(a.lastActivityAt));
 
   return {
