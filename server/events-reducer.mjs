@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 
 const QUIET_AFTER_MS = 2_000;
 const STALE_AFTER_MS = 5 * 60 * 1_000;
+const EMPLOYEE_HANDOFF_MS = 15_000;
 const ACTIVE_STATUSES = new Set(["working", "compacting", "stopping"]);
+const RESTART_EVENT_TYPES = new Set(["session.started", "employee.started", "employee.spawned", "employee.work.started"]);
 
 const ALLOWED_EVENT_TYPES = new Set([
   "session.started",
@@ -74,22 +76,45 @@ export function sanitizeEvent(input) {
   };
 }
 
+const ROLE_ASSIGNMENTS = {
+  explorer: ["코드 탐색 담당", "코드베이스 탐색"],
+  worker: ["구현 담당", "배정 기능 구현"],
+  office_builder: ["구현 엔지니어", "기능 구현"],
+  office_verifier: ["품질 검증 담당", "테스트·수용 기준 검증"],
+  office_reviewer: ["코드 리뷰 담당", "회귀·보안·유지보수 검토"],
+  office_researcher: ["리서치 담당", "자료·근거 조사"],
+  office_planner: ["기획 담당", "요구사항·작업 분해"],
+  office_challenger: ["대안 검토 담당", "리스크·대안 검토"],
+};
+
+function toolAssignment(tool) {
+  if (!tool) return null;
+  if (/apply_patch|edit|write/i.test(tool)) return ["코드 수정 담당", "코드 변경"];
+  if (/browser|playwright|computer|screenshot/i.test(tool)) return ["화면 검증 담당", "화면 동작 검증"];
+  if (/web|search|open|fetch/i.test(tool)) return ["자료 조사 담당", "자료·근거 조사"];
+  if (/bash|shell|exec|command|terminal/i.test(tool)) return ["실행·점검 담당", "명령 실행·상태 점검"];
+  return null;
+}
+
 function employeeIdentity(event) {
   if (event.employeeId) {
     const id = opaqueId("emp", event.employeeId);
+    const assignment = ROLE_ASSIGNMENTS[event.employeeRole] ?? toolAssignment(event.tool) ?? ["기능 실행 담당", "지정 기능 수행"];
     return {
       id,
-      name: event.employeeRole || `AI 직원 ${id.slice(-4)}`,
-      role: event.employeeRole || "기능 담당",
+      name: assignment[0],
+      role: assignment[1],
       kind: "subagent",
+      assignmentIsSpecific: Boolean(ROLE_ASSIGNMENTS[event.employeeRole] || toolAssignment(event.tool)),
     };
   }
   const id = opaqueId("emp", `main:${event.sessionId || event.project.key}`);
   return {
     id,
-    name: `메인 직원 ${id.slice(-4)}`,
-    role: "총괄 실행 담당",
+    name: `${event.project.name} 총괄`,
+    role: "프로젝트 총괄",
     kind: "main",
+    assignmentIsSpecific: true,
   };
 }
 
@@ -143,6 +168,16 @@ function projectStatus(employees, ended) {
   return "오프라인";
 }
 
+function isVisibleEmployee(employee, nowMs) {
+  if (!employee.terminalAt) return true;
+  return nowMs - Date.parse(employee.terminalAt) < EMPLOYEE_HANDOFF_MS;
+}
+
+function isTerminalEvent(event) {
+  return event.type === "session.ended"
+    || (["employee.completed", "employee.work.completed"].includes(event.type) && event.status === "completed");
+}
+
 export function reduceEvents(rawEvents, { now = new Date() } = {}) {
   const nowMs = now.getTime();
   const events = rawEvents.map(sanitizeEvent).filter(Boolean).sort((a, b) => {
@@ -164,12 +199,21 @@ export function reduceEvents(rawEvents, { now = new Date() } = {}) {
     project.lastActivityAt = event.at;
 
     const identity = employeeIdentity(event);
-    const employee = project.employees.get(identity.id) ?? { ...identity, status: "online", lastActivityAt: event.at, tool: null };
-    employee.name = identity.name;
-    employee.role = identity.role;
+    const existingEmployee = project.employees.get(identity.id);
+    const employee = existingEmployee ?? { ...identity, status: "online", lastActivityAt: event.at, tool: null, terminalAt: null };
+    if (!existingEmployee || identity.assignmentIsSpecific || employee.name === "기능 실행 담당") {
+      employee.name = identity.name;
+      employee.role = identity.role;
+    }
     employee.kind = identity.kind;
     const nextStatus = statusFor(event, nowMs);
-    employee.status = employee.status === "offline" && event.type !== "session.started" ? "offline" : nextStatus;
+    const isRestart = RESTART_EVENT_TYPES.has(event.type);
+    if (isRestart) employee.terminalAt = null;
+    employee.status = employee.terminalAt && !isRestart ? employee.status : nextStatus;
+    if (isTerminalEvent(event)) {
+      employee.terminalAt = event.at;
+      employee.status = nextStatus;
+    }
     employee.lastActivityAt = event.at;
     employee.tool = event.tool;
     project.employees.set(identity.id, employee);
@@ -188,12 +232,13 @@ export function reduceEvents(rawEvents, { now = new Date() } = {}) {
   }
 
   const projectSnapshots = [...projects.values()].map((project) => {
-    let employees = [...project.employees.values()].sort((a, b) => Date.parse(b.lastActivityAt) - Date.parse(a.lastActivityAt));
+    const allEmployees = [...project.employees.values()];
+    const ended = projectEnded(allEmployees);
+    let employees = allEmployees.filter((employee) => isVisibleEmployee(employee, nowMs)).sort((a, b) => Date.parse(b.lastActivityAt) - Date.parse(a.lastActivityAt));
     if (employees.filter((employee) => ACTIVE_STATUSES.has(employee.status)).length >= 2) {
       employees = employees.map((employee) => ACTIVE_STATUSES.has(employee.status) ? { ...employee, status: "meeting" } : employee);
     }
-    employees = employees.map((employee) => ({ ...employee, freshness }));
-    const ended = projectEnded(employees);
+    employees = employees.map(({ assignmentIsSpecific, terminalAt, ...employee }) => ({ ...employee, freshness }));
     return { key: project.key, name: project.name, status: projectStatus(employees, ended), ended, freshness, lastActivityAt: project.lastActivityAt, employees };
   }).sort((a, b) => Date.parse(b.lastActivityAt) - Date.parse(a.lastActivityAt));
 
@@ -208,4 +253,4 @@ export function reduceEvents(rawEvents, { now = new Date() } = {}) {
   };
 }
 
-export { QUIET_AFTER_MS, STALE_AFTER_MS };
+export { EMPLOYEE_HANDOFF_MS, QUIET_AFTER_MS, STALE_AFTER_MS };
