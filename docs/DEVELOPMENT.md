@@ -42,6 +42,8 @@ The event sink omits prompts, commands, tool input/output, file contents, creden
 
 When at least two employees in a project are actively working, compacting, or stopping, the reducer marks those employees as collaborating and the UI places them at the meeting table. A snapshot remains fresh through exactly five minutes after the last event and becomes stale after that boundary.
 
+Project rooms retain their previous positions while activity data changes. A newly observed project is appended without moving existing rooms, and a project moves behind active rooms only when all of its main sessions are offline. This prevents the 1.5-second polling cycle from turning activity updates into distracting layout changes.
+
 **Result:** the office shows active collaboration, approval waits, quiet transitions, disconnected state, and stale state separately.
 
 ![Sanitized live-mode dashboard](screenshots/dashboard-live-sanitized.png)
@@ -79,7 +81,7 @@ npm run build
 
 Expected results:
 
-- 15/15 Node tests pass.
+- 24/24 Node tests pass.
 - Vite production build succeeds.
 - `dist/client/index.html`, `dist/server/index.js`, and `dist/.openai/hosting.json` are generated.
 - The local server listens only on `127.0.0.1`.

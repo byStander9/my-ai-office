@@ -10,6 +10,7 @@ Before making substantial visual changes, use the Product Design plugin's `get-c
 - Represent each project as a rectangular room on a dark office floor with a visible door.
 - Use small icon-library employee markers; when two or more employees actively collaborate, group them at one clearly labeled meeting table.
 - Avoid decorative 3D/game-like scenery that competes with project status readability.
+- Keep project-room positions stable during ordinary activity updates. Only project additions, removals, completion, or resumption may change room order.
 
 When implementing from a selected generated mock, treat that image as the source of truth for layout, component anatomy, density, spacing, color, typography, visible content, and hierarchy.
 

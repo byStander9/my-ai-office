@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowClockwise, Briefcase, Buildings, CheckCircle, Clock, Code, Cpu, Database, Funnel, Handshake, MagnifyingGlass, ShieldCheck, UserCircle, UsersThree, WarningCircle } from "@phosphor-icons/react";
+import { stabilizeProjectOrder } from "./project-order.js";
 
 const palette = ["#de8d29", "#4c7d72", "#7f6bb2", "#b65f52", "#4778a8", "#9a7744"];
 const demoProjects = [
@@ -114,7 +115,8 @@ export function App() {
         if (!Array.isArray(payload.projects) || !Array.isArray(payload.events) || !["live", "demo"].includes(payload.mode) || !["fresh", "stale", "demo"].includes(payload.freshness)) throw new Error("Invalid snapshot");
         if (cancelled) return;
         const isDemo = payload.mode === "demo";
-        setProjects(decorateProjects(isDemo ? demoProjects : payload.projects));
+        const nextProjects = decorateProjects(isDemo ? demoProjects : payload.projects);
+        setProjects((previousProjects) => stabilizeProjectOrder(previousProjects, nextProjects));
         setEvents(isDemo ? demoEvents : payload.events);
         setSource(isDemo ? "demo" : "live");
         setFreshness(payload.freshness);

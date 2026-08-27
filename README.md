@@ -17,6 +17,7 @@ Sanitized live mode, captured from the real local API with synthetic public even
 - Working, collaborating, waiting-for-approval, idle, and stale states
 - A recent-activity timeline refreshed every 1.5 seconds
 - Automatic meeting-table grouping when two or more employees work on one project
+- Stable project-room positions during ordinary activity; rooms move only for project lifecycle changes
 - A clear demo state when no local event file exists
 
 ## Quick start on Windows
@@ -94,7 +95,7 @@ npm test
 npm run build
 ```
 
-The current suite contains 15 tests covering event-sink privacy, repeatable hook merging, event sanitization, opaque identifiers, stale-state boundaries, collaboration inference, localhost-only serving, rotated event files, and static hosting output. The complete staged build record and results are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+The current suite contains 24 tests covering event-sink privacy, repeatable hook merging, event sanitization, opaque identifiers, stable project ordering, project completion and resumption, stale-state boundaries, collaboration inference, localhost-only serving, rotated event files, and static hosting output. The complete staged build record and results are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Repository map
 
