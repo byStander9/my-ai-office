@@ -16,9 +16,9 @@ const demoProjects = [
   ]},
 ];
 const demoEvents = [
-  { id: "demo-1", projectId: "demo-office", employeeId: "demo-ui", employeeName: "UI 엔지니어", message: "프로젝트 필터와 사무실 맵을 연결했습니다.", at: new Date(Date.now() - 48_000).toISOString(), type: "employee.tool.completed", status: "working" },
+  { id: "demo-1", projectId: "demo-office", employeeId: "demo-ui", employeeName: "UI 엔지니어", message: "UI 엔지니어가 화면 동작 검증 업무를 진행했습니다.", activityLabel: "화면 동작 검증", stepCount: 8, startedAt: new Date(Date.now() - 18 * 60_000).toISOString(), at: new Date(Date.now() - 48_000).toISOString(), type: "activity.summary", status: "working" },
   { id: "demo-2", projectId: "demo-office", employeeId: "demo-lead", employeeName: "기획 리드", message: "실시간 이벤트 수신 규칙을 확정했습니다.", at: new Date(Date.now() - 132_000).toISOString(), type: "directive.submitted", status: "working" },
-  { id: "demo-3", projectId: "demo-npu", employeeId: "demo-perf", employeeName: "성능 분석가", message: "벤치마크 결과 비교를 진행하고 있습니다.", at: new Date(Date.now() - 288_000).toISOString(), type: "employee.tool.started", status: "working" },
+  { id: "demo-3", projectId: "demo-npu", employeeId: "demo-perf", employeeName: "성능 분석가", message: "성능 분석가가 명령 실행·상태 점검 업무를 진행했습니다.", activityLabel: "명령 실행·상태 점검", stepCount: 12, startedAt: new Date(Date.now() - 42 * 60_000).toISOString(), at: new Date(Date.now() - 288_000).toISOString(), type: "activity.summary", status: "working" },
 ];
 
 const stateLabels = {
@@ -59,6 +59,13 @@ function relativeTime(timestamp, now) {
   if (minutes < 60) return `${minutes}분 전`;
   const hours = Math.floor(minutes / 60);
   return hours < 24 ? `${hours}시간 전` : `${Math.floor(hours / 24)}일 전`;
+}
+
+function activityDuration(event) {
+  const durationMs = Date.parse(event.at) - Date.parse(event.startedAt);
+  if (!Number.isFinite(durationMs) || durationMs < 60_000) return null;
+  const minutes = Math.floor(durationMs / 60_000);
+  return minutes < 60 ? `${minutes}분간` : `${Math.floor(minutes / 60)}시간 ${minutes % 60}분간`;
 }
 
 function decorateProjects(projects) {
@@ -163,13 +170,15 @@ export function App() {
       </section>
 
       <aside className="activity-panel" aria-labelledby="activity-title">
-        <div className="activity-panel__heading"><div><span className="eyebrow">ACTIVITY</span><h2 id="activity-title">최근 활동</h2></div><span className="activity-count">{visibleEvents.length}</span></div>
+        <div className="activity-panel__heading"><div><span className="eyebrow">WORK SUMMARY</span><h2 id="activity-title">업무 활동 요약</h2></div><span className="activity-count">{visibleEvents.length}</span></div>
         <div className="timeline" aria-live="polite">{visibleEvents.map((event) => {
           const project = projects.find((item) => item.id === event.projectId) ?? projects[0];
-          const Icon = event.type === "employee.approval.waiting" ? ShieldCheck : event.type === "directive.submitted" ? CheckCircle : ["employee.completed", "employee.tool.completed", "employee.work.completed"].includes(event.type) ? Handshake : Clock;
-          return <article className="timeline-item" key={event.id}><span className="timeline-item__icon" style={{ "--event-color": project?.color ?? palette[0] }}><Icon size={17} weight="duotone" /></span><div><div className="timeline-item__meta"><span>{project?.shortName ?? "프로젝트"}</span><time>{relativeTime(event.at, now)}</time></div><p>{event.message}</p><small>{event.employeeName ?? "AI 직원"}</small></div></article>;
+          const Icon = event.type === "employee.approval.waiting" || ["visual_check", "validation"].includes(event.activityCategory) ? ShieldCheck : event.activityCategory === "code_change" ? Code : event.activityCategory === "research" ? MagnifyingGlass : event.activityCategory === "coordination" || ["employee.completed", "employee.work.completed"].includes(event.type) ? Handshake : ["planning", "document_work", "environment_setup", "automation"].includes(event.activityCategory) || event.type === "directive.submitted" ? CheckCircle : Clock;
+          const duration = activityDuration(event);
+          const detail = event.activityLabel ? `${event.employeeName} · ${event.activityLabel}${event.stepCount > 1 ? ` · ${event.stepCount}개 세부 단계` : ""}` : event.employeeName ?? "AI 직원";
+          return <article className="timeline-item" key={event.id}><span className="timeline-item__icon" style={{ "--event-color": project?.color ?? palette[0] }}><Icon size={17} weight="duotone" /></span><div><div className="timeline-item__meta"><span>{project?.shortName ?? "프로젝트"}</span><time>{duration ? `${duration} · ` : ""}{relativeTime(event.at, now)}</time></div><p>{event.message}</p><small>{detail}</small></div></article>;
         })}</div>
-        <div className="activity-panel__footer"><span><Clock size={15} /> 1.5초마다 상태 확인</span><span>{source === "live" ? "로컬 API 연결됨" : source === "demo" ? "이벤트 파일 비어 있음 · DEMO" : "재연결 시도 중"}</span></div>
+        <div className="activity-panel__footer"><span><Clock size={15} /> 세부 작업을 10분 흐름으로 요약</span><span>{source === "live" ? "로컬 API 연결됨" : source === "demo" ? "이벤트 파일 비어 있음 · DEMO" : "재연결 시도 중"}</span></div>
       </aside>
     </section>
   </main>;

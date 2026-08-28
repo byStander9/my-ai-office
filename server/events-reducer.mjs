@@ -4,6 +4,7 @@ const QUIET_AFTER_MS = 2_000;
 const STALE_AFTER_MS = 5 * 60 * 1_000;
 const EMPLOYEE_HANDOFF_MS = 15_000;
 const EMPLOYEE_INACTIVE_MS = 30 * 60 * 1_000;
+const ACTIVITY_GROUP_GAP_MS = 10 * 60 * 1_000;
 const ACTIVE_STATUSES = new Set(["working", "compacting", "stopping"]);
 const RESTART_EVENT_TYPES = new Set(["session.started", "employee.started", "employee.spawned", "employee.work.started"]);
 
@@ -97,6 +98,20 @@ function toolAssignment(tool) {
   return null;
 }
 
+function activityForTool(tool) {
+  if (/update_plan/i.test(tool ?? "")) return ["planning", "작업 계획 관리"];
+  if (/document_control/i.test(tool ?? "")) return ["document_work", "문서 작업"];
+  if (/workspace_dependencies/i.test(tool ?? "")) return ["environment_setup", "작업 환경 준비"];
+  if (/node_repl|programmatic/i.test(tool ?? "")) return ["automation", "자동화 실행"];
+  if (/apply_patch|edit|write/i.test(tool ?? "")) return ["code_change", "코드 변경"];
+  if (/browser|playwright|computer|screenshot|view_image|imagegen/i.test(tool ?? "")) return ["visual_check", "화면 동작 검증"];
+  if (/web|search|open|fetch|read/i.test(tool ?? "")) return ["research", "자료·근거 조사"];
+  if (/collaboration|spawn|agent/i.test(tool ?? "")) return ["coordination", "AI 직원 협업 조율"];
+  if (/test|verify|review|audit|lint/i.test(tool ?? "")) return ["validation", "품질 검증"];
+  if (/bash|shell|exec|command|terminal/i.test(tool ?? "")) return ["workspace_check", "명령 실행·상태 점검"];
+  return ["general", "도구 기반 작업"];
+}
+
 function employeeIdentity(event) {
   if (event.employeeId) {
     const id = opaqueId("emp", event.employeeId);
@@ -133,25 +148,69 @@ function statusFor(event, nowMs) {
 }
 
 function activityMessage(event, employee) {
-  const toolLabel = event.tool ? ` · ${event.tool}` : "";
   switch (event.type) {
     case "session.started": return `${employee.name}이(가) 업무 공간에 접속했습니다.`;
     case "session.ended": return `${employee.name}의 세션이 종료되었습니다.`;
     case "directive.submitted": return `${employee.name}이(가) 새 지시를 처리하고 있습니다.`;
     case "employee.spawned":
     case "employee.started": return `${employee.name}이(가) 프로젝트에 합류했습니다.`;
-    case "employee.work.started":
-    case "employee.tool.started": return `${employee.name}이(가) 작업을 시작했습니다${toolLabel}.`;
+    case "employee.work.started": return `${employee.name}이(가) 배정 업무를 시작했습니다.`;
     case "employee.completed": return `${employee.name}이(가) 담당 작업을 인계했습니다.`;
     case "employee.work.completed":
     case "employee.tool.completed": return event.status === "completed"
       ? `${employee.name}이(가) 담당 작업을 인계했습니다.`
-      : `${employee.name}이(가) 작업 단계를 마쳤습니다${toolLabel}.`;
+      : `${employee.name}이(가) 작업 단계를 마쳤습니다.`;
     case "employee.approval.waiting": return `${employee.name}이(가) CEO 승인을 기다리고 있습니다.`;
     case "session.compacting": return `${employee.name}이(가) 작업 맥락을 정리하고 있습니다.`;
     case "session.working": return `${employee.name}이(가) 정리된 맥락으로 업무를 재개했습니다.`;
     case "turn.stopping": return `${employee.name}이(가) 현재 작업을 정리하고 있습니다.`;
     default: return `${employee.name}의 상태가 갱신되었습니다.`;
+  }
+}
+
+function updateActivitySummary(recent, activityGroups, event, employee, projectId) {
+  const [activityCategory, activityLabel] = activityForTool(event.tool);
+  const key = `${projectId}:${employee.id}:${activityCategory}`;
+  let summary = activityGroups.get(key);
+  if (!summary || Date.parse(event.at) - Date.parse(summary.at) >= ACTIVITY_GROUP_GAP_MS) {
+    summary = {
+      id: opaqueId("evt", event.id),
+      at: event.at,
+      startedAt: event.at,
+      type: "activity.summary",
+      status: "working",
+      projectId,
+      employeeId: employee.id,
+      employeeName: employee.name,
+      activityCategory,
+      activityLabel,
+      stepCount: 0,
+      message: "",
+      _order: event.appendSeq ?? Date.parse(event.at),
+      _toolUseIds: new Set(),
+    };
+    activityGroups.set(key, summary);
+    recent.push(summary);
+  }
+
+  if (event.toolUseId) {
+    if (!summary._toolUseIds.has(event.toolUseId)) {
+      summary._toolUseIds.add(event.toolUseId);
+      summary.stepCount += 1;
+    }
+  } else if (event.type === "employee.tool.started" || summary.stepCount === 0) {
+    summary.stepCount += 1;
+  }
+  summary.at = event.at;
+  summary.employeeName = employee.name;
+  summary._order = event.appendSeq ?? Date.parse(event.at);
+  summary.message = `${employee.name}이(가) ${activityLabel} 업무를 진행했습니다.`;
+}
+
+function closeActivitySummaries(activityGroups, projectId, employeeId) {
+  const prefix = `${projectId}:${employeeId}:`;
+  for (const key of activityGroups.keys()) {
+    if (key.startsWith(prefix)) activityGroups.delete(key);
   }
 }
 
@@ -187,6 +246,7 @@ export function reduceEvents(rawEvents, { now = new Date() } = {}) {
   });
   const projects = new Map();
   const recent = [];
+  const activityGroups = new Map();
   const lastEventAt = events.length ? events[events.length - 1].at : null;
   const freshness = !lastEventAt ? "demo" : nowMs - Date.parse(lastEventAt) > STALE_AFTER_MS ? "stale" : "fresh";
 
@@ -219,17 +279,25 @@ export function reduceEvents(rawEvents, { now = new Date() } = {}) {
     employee.tool = event.tool;
     project.employees.set(identity.id, employee);
 
-    recent.push({
-      id: opaqueId("evt", event.id),
-      at: event.at,
-      type: event.type,
-      status: statusFor(event, nowMs),
-      projectId: project.key,
-      employeeId: identity.id,
-      employeeName: identity.name,
-      tool: event.tool,
-      message: activityMessage(event, identity),
-    });
+    const isToolActivity = ["employee.tool.started", "employee.tool.completed"].includes(event.type) && event.status !== "completed";
+    if (isToolActivity) {
+      updateActivitySummary(recent, activityGroups, event, identity, project.key);
+    } else {
+      closeActivitySummaries(activityGroups, project.key, identity.id);
+      if (event.type !== "activity.observed") {
+        recent.push({
+          id: opaqueId("evt", event.id),
+          at: event.at,
+          type: event.type,
+          status: statusFor(event, nowMs),
+          projectId: project.key,
+          employeeId: identity.id,
+          employeeName: identity.name,
+          message: activityMessage(event, identity),
+          _order: event.appendSeq ?? Date.parse(event.at),
+        });
+      }
+    }
   }
 
   const projectSnapshots = [...projects.values()].map((project) => {
@@ -250,8 +318,8 @@ export function reduceEvents(rawEvents, { now = new Date() } = {}) {
     generatedAt: now.toISOString(),
     quietAfterMs: QUIET_AFTER_MS,
     projects: projectSnapshots,
-    events: recent.reverse().slice(0, 80),
+    events: recent.sort((a, b) => Date.parse(b.at) - Date.parse(a.at) || b._order - a._order).slice(0, 80).map(({ _order, _toolUseIds, ...event }) => event),
   };
 }
 
-export { EMPLOYEE_HANDOFF_MS, EMPLOYEE_INACTIVE_MS, QUIET_AFTER_MS, STALE_AFTER_MS };
+export { ACTIVITY_GROUP_GAP_MS, EMPLOYEE_HANDOFF_MS, EMPLOYEE_INACTIVE_MS, QUIET_AFTER_MS, STALE_AFTER_MS };

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { EMPLOYEE_HANDOFF_MS, EMPLOYEE_INACTIVE_MS, reduceEvents, sanitizeEvent } from "../server/events-reducer.mjs";
+import { ACTIVITY_GROUP_GAP_MS, EMPLOYEE_HANDOFF_MS, EMPLOYEE_INACTIVE_MS, reduceEvents, sanitizeEvent } from "../server/events-reducer.mjs";
 
 function event(overrides = {}) {
   return {
@@ -65,6 +65,48 @@ test("names generic employees from their current functional tool without exposin
   assert.equal(snapshot.projects[0].employees[0].name, "코드 수정 담당");
   assert.equal(snapshot.projects[0].employees[0].role, "코드 변경");
   assert.equal(JSON.stringify(snapshot).includes("agent-default"), false);
+});
+
+test("groups repeated tool events into a long-term functional activity summary", () => {
+  const events = [event({ id: "directive", type: "directive.submitted", status: "working", appendSeq: 1 })];
+  for (let index = 0; index < 3; index += 1) {
+    const at = new Date(Date.parse("2026-08-26T06:00:01.000Z") + index * 60_000).toISOString();
+    events.push(event({ id: `start-${index}`, at, type: "employee.tool.started", status: "working", tool: "Bash", toolUseId: `tool-${index}`, appendSeq: index * 2 + 2 }));
+    events.push(event({ id: `finish-${index}`, at, type: "employee.tool.completed", status: "working", tool: "Bash", toolUseId: `tool-${index}`, appendSeq: index * 2 + 3 }));
+  }
+  const snapshot = reduceEvents(events, { now: new Date("2026-08-26T06:03:00.000Z") });
+  const summaries = snapshot.events.filter((item) => item.type === "activity.summary");
+  assert.equal(summaries.length, 1);
+  assert.equal(summaries[0].activityCategory, "workspace_check");
+  assert.equal(summaries[0].activityLabel, "명령 실행·상태 점검");
+  assert.equal(summaries[0].stepCount, 3);
+  assert.equal(summaries[0].startedAt, "2026-08-26T06:00:01.000Z");
+  assert.equal(summaries[0].at, "2026-08-26T06:02:01.000Z");
+  assert.equal(JSON.stringify(summaries[0]).includes("Bash"), false);
+});
+
+test("starts a new activity summary at the ten-minute gap and after lifecycle events", () => {
+  const events = [
+    event({ id: "tool-a", type: "employee.tool.completed", status: "working", employeeId: "agent-a", employeeRole: "office_builder", tool: "apply_patch", toolUseId: "tool-a", appendSeq: 1 }),
+    event({ id: "tool-b", at: new Date(Date.parse("2026-08-26T06:00:00.000Z") + ACTIVITY_GROUP_GAP_MS).toISOString(), type: "employee.tool.completed", status: "working", employeeId: "agent-a", employeeRole: "office_builder", tool: "apply_patch", toolUseId: "tool-b", appendSeq: 2 }),
+    event({ id: "approval", at: "2026-08-26T06:10:01.000Z", type: "employee.approval.waiting", status: "waiting_approval", employeeId: "agent-a", employeeRole: "office_builder", appendSeq: 3 }),
+    event({ id: "tool-c", at: "2026-08-26T06:10:02.000Z", type: "employee.tool.completed", status: "working", employeeId: "agent-a", employeeRole: "office_builder", tool: "apply_patch", toolUseId: "tool-c", appendSeq: 4 }),
+  ];
+  const snapshot = reduceEvents(events, { now: new Date("2026-08-26T06:10:03.000Z") });
+  assert.equal(snapshot.events.filter((item) => item.type === "activity.summary").length, 3);
+  assert.equal(snapshot.events.filter((item) => item.type === "employee.approval.waiting").length, 1);
+});
+
+test("uses specific safe categories for planning, documents, environment setup, and automation", () => {
+  const tools = [
+    ["update_plan", "planning", "작업 계획 관리"],
+    ["mcp__codex_apps__codex_document_control__list_document_sessions", "document_work", "문서 작업"],
+    ["codex_app__load_workspace_dependencies", "environment_setup", "작업 환경 준비"],
+    ["mcp__node_repl__js", "automation", "자동화 실행"],
+  ];
+  const snapshot = reduceEvents(tools.map(([tool], index) => event({ id: `tool-${index}`, at: new Date(Date.parse("2026-08-26T06:00:00.000Z") + index * 1_000).toISOString(), type: "employee.tool.completed", status: "working", tool, toolUseId: `tool-use-${index}`, appendSeq: index + 1 })), { now: new Date("2026-08-26T06:00:05.000Z") });
+  const categories = new Map(snapshot.events.map((item) => [item.activityCategory, item.activityLabel]));
+  for (const [, category, label] of tools) assert.equal(categories.get(category), label);
 });
 
 test("removes completed subagents after a short handoff period while keeping their activity", () => {

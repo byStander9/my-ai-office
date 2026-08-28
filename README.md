@@ -15,11 +15,12 @@ Sanitized live mode, captured from the real local API with synthetic public even
 - All active Codex projects in one office map
 - Main agents and functional subagents grouped by project
 - Working, collaborating, waiting-for-approval, idle, and stale states
-- A recent-activity timeline refreshed every 1.5 seconds
+- A long-term work-summary timeline refreshed every 1.5 seconds
 - Automatic meeting-table grouping when two or more employees work on one project
 - Functional employee names derived from safe role/tool metadata instead of framework labels such as `default`
 - Completed employees leave project rooms after a 15-second handoff period while their completion remains in recent activity
 - Employees with no activity for 30 minutes leave the room as orphan cleanup and return automatically on their next event
+- Repeated tool start/finish events become one functional activity card per employee and category over a 10-minute work stream
 - Stable project-room positions during ordinary activity; rooms move only for project lifecycle changes
 - A clear demo state when no local event file exists
 
@@ -98,7 +99,7 @@ npm test
 npm run build
 ```
 
-The current suite contains 31 tests covering event-sink privacy, repeatable hook merging, event sanitization, opaque identifiers, employee retirement, orphan cleanup and functional naming, stable project ordering, project completion and resumption, stale-state boundaries, collaboration inference, localhost-only serving, rotated event files, and static hosting output. The complete staged build record and results are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+The current suite contains 34 tests covering event-sink privacy, repeatable hook merging, event sanitization, opaque identifiers, long-term activity summaries, employee retirement, orphan cleanup and functional naming, stable project ordering, project completion and resumption, stale-state boundaries, collaboration inference, localhost-only serving, rotated event files, and static hosting output. The complete staged build record and results are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Repository map
 
