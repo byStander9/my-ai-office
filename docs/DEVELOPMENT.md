@@ -46,6 +46,8 @@ Project rooms retain their previous positions while activity data changes. A new
 
 Employee labels are derived from allowlisted role and tool categories, so framework labels such as `default` become functional names without reading prompts or transcripts. Completed subagents and ended main sessions remain visible for a 15-second handoff period and then leave the room; their completion events remain in recent activity. Employees without any activity for 30 minutes are also hidden as orphan cleanup and return automatically on their next event. Only an explicit restart event can return an explicitly completed employee to the room.
 
+The activity panel keeps directives, assignments, handoffs, approvals, compaction, and session transitions as distinct events. Repeated tool start/finish events are grouped by employee and safe activity category until a 10-minute inactivity gap. Each card shows a category such as code change, visual verification, research, coordination, validation, or command/status checking, plus its duration and number of detailed steps. Prompts, commands, file paths, tool inputs, and tool outputs are not used for these descriptions.
+
 **Result:** the office shows active collaboration, approval waits, quiet transitions, disconnected state, and stale state separately.
 
 ![Sanitized live-mode dashboard](screenshots/dashboard-live-sanitized.png)
@@ -83,7 +85,7 @@ npm run build
 
 Expected results:
 
-- 31/31 Node tests pass.
+- 34/34 Node tests pass.
 - Vite production build succeeds.
 - `dist/client/index.html`, `dist/server/index.js`, and `dist/.openai/hosting.json` are generated.
 - The local server listens only on `127.0.0.1`.
