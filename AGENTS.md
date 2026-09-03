@@ -15,6 +15,7 @@ Before making substantial visual changes, use the Product Design plugin's `get-c
 - Present the right-side activity feed as long-term work summaries. Group repeated tool start/finish events by employee and safe work category over a 10-minute activity gap; keep directives, assignments, handoffs, approvals, compaction, and session lifecycle events distinct.
 - Show only projects that have a Codex work signal such as tool, subagent, or approval activity. Hide a project after 24 hours without work and restore it when new work arrives.
 - Keep the office-map project filter separate from the right-side activity project filter. Detailed directives and collaboration messages are local opt-in data: public/default capture stays off, redaction happens before persistence and again at the API boundary, and discussion text appears only when at least two subagents collaborate.
+- Present every work description as a Korean chain from the CEO directive to employee assignment, current work stage, collaboration, validation, and handoff. Never render raw tool names, opaque identifiers, encrypted strings, or unverified English detail; use a clear Korean fallback when local deterministic conversion cannot preserve the meaning.
 
 When implementing from a selected generated mock, treat that image as the source of truth for layout, component anatomy, density, spacing, color, typography, visible content, and hierarchy.
 

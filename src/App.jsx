@@ -4,12 +4,17 @@ import { stabilizeProjectOrder } from "./project-order.js";
 
 const palette = ["#de8d29", "#4c7d72", "#7f6bb2", "#b65f52", "#4778a8", "#9a7744"];
 const demoProjects = [
-  { key: "demo-office", name: "AI 오피스 데모", status: "DEMO", employees: [
+  { key: "demo-office", name: "AI 오피스 예시", status: "예시", currentDirective: { title: "프로젝트별 실시간 협업 현황을 보여주세요." }, assignments: [
+    { id: "demo-assignment-1", employeeName: "화면 구현 담당", task: "대시보드 화면 구현 업무" },
+    { id: "demo-assignment-2", employeeName: "품질 검증 담당", task: "화면과 동작 검증 업무" },
+  ], employees: [
     { id: "demo-lead", name: "기획 리드", role: "요구사항 정리", status: "working", kind: "main" },
-    { id: "demo-ui", name: "UI 엔지니어", role: "대시보드 구현", status: "working", kind: "subagent" },
+    { id: "demo-ui", name: "화면 구현 담당", role: "대시보드 구현", status: "working", kind: "subagent" },
     { id: "demo-qa", name: "품질 담당", role: "빌드 검증 대기", status: "online", kind: "subagent" },
   ]},
-  { key: "demo-npu", name: "NPU 성능 분석 데모", status: "DEMO", employees: [
+  { key: "demo-npu", name: "NPU 성능 분석 예시", status: "예시", currentDirective: { title: "동일 조건의 성능 측정 결과를 검증해주세요." }, assignments: [
+    { id: "demo-assignment-3", employeeName: "리서치 담당", task: "비교 기준과 측정 조건 조사 업무" },
+  ], employees: [
     { id: "demo-perf", name: "성능 분석가", role: "벤치마크 분석", status: "working", kind: "main" },
     { id: "demo-research", name: "리서처", role: "근거 교차검증", status: "meeting", kind: "subagent" },
     { id: "demo-backend", name: "백엔드 담당", role: "API 로그 확인", status: "meeting", kind: "subagent" },
@@ -19,7 +24,7 @@ const demoProjects = [
   ]},
 ];
 const demoEvents = [
-  { id: "demo-1", projectId: "demo-office", employeeId: "demo-ui", employeeName: "UI 엔지니어", message: "UI 엔지니어가 화면 동작 검증 업무를 진행했습니다.", activityLabel: "화면 동작 검증", stepCount: 8, startedAt: new Date(Date.now() - 18 * 60_000).toISOString(), at: new Date(Date.now() - 48_000).toISOString(), type: "activity.summary", status: "working" },
+  { id: "demo-1", projectId: "demo-office", employeeId: "demo-ui", employeeName: "화면 구현 담당", instructionTitle: "프로젝트별 실시간 협업 현황을 보여주세요.", workStage: "4단계 · 화면과 동작 검증", message: "화면 구현 담당이(가) '프로젝트별 실시간 협업 현황을 보여주세요.' 지시에 따라 4단계 · 화면과 동작 검증을 진행했습니다.", activityLabel: "화면 동작 검증", stepCount: 8, startedAt: new Date(Date.now() - 18 * 60_000).toISOString(), at: new Date(Date.now() - 48_000).toISOString(), type: "activity.summary", status: "working" },
   { id: "demo-2", projectId: "demo-office", employeeId: "demo-lead", employeeName: "기획 리드", message: "실시간 이벤트 수신 규칙을 확정했습니다.", at: new Date(Date.now() - 132_000).toISOString(), type: "directive.submitted", status: "working" },
   { id: "demo-3", projectId: "demo-npu", employeeId: "demo-perf", employeeName: "성능 분석가", message: "성능 분석가가 명령 실행·상태 점검 업무를 진행했습니다.", activityLabel: "명령 실행·상태 점검", stepCount: 12, startedAt: new Date(Date.now() - 42 * 60_000).toISOString(), at: new Date(Date.now() - 288_000).toISOString(), type: "activity.summary", status: "working" },
 ];
@@ -89,7 +94,7 @@ function Agent({ agent, projectColor }) {
   const Icon = agent.icon ?? UserCircle;
   return <span className={`agent agent--${agent.state}`} title={`${agent.name} · ${agent.role}`}>
     <span className="agent__avatar" style={{ "--agent-color": projectColor }}><Icon size={20} weight="duotone" /><span className="agent__state" /></span>
-    <span className="agent__copy"><strong>{agent.name}</strong><span>{stateLabels[agent.status] ?? agent.status}</span></span>
+    <span className="agent__copy"><strong>{agent.name}</strong><span>{stateLabels[agent.status] ?? "상태 확인 중"}</span></span>
   </span>;
 }
 
@@ -99,6 +104,8 @@ function ProjectRoom({ project, selected, onSelect }) {
   return <button className={`project-room ${selected ? "project-room--selected" : ""}`} onClick={() => onSelect(project.id)} type="button" aria-label={`${project.name} 프로젝트 보기`} style={{ "--room-color": project.color }}>
     <span className="project-room__door" aria-hidden="true" />
     <span className="project-room__header"><span><strong>{project.name}</strong><small>{project.health}</small></span><span className="project-room__count"><UsersThree size={16} /> {project.agents.length}</span></span>
+    {project.currentDirective && <span className="project-room__directive"><b>현재 CEO 지시</b><span>{project.currentDirective.title}</span></span>}
+    {project.assignments?.length > 0 && <span className="project-room__assignments"><b>직원별 배정 업무</b>{project.assignments.slice(0, 3).map((assignment) => <span key={assignment.id}><strong>{assignment.employeeName}</strong>{assignment.task}</span>)}</span>}
     <span className="project-room__agents">{deskAgents.map((agent) => <Agent key={agent.id} agent={agent} projectColor={project.color} />)}</span>
     {meetingAgents.length > 0 && <span className="meeting-table"><span className="meeting-table__label"><Handshake size={15} weight="duotone" /> 협업 테이블</span><span className="meeting-table__people">{meetingAgents.map((agent) => <Agent key={agent.id} agent={agent} projectColor={project.color} />)}</span>{project.discussions?.length > 0 && <span className="meeting-table__discussion"><strong>최근 논의</strong>{project.discussions.slice(0, 3).map((discussion) => <span key={discussion.id}><b>{discussion.employeeName}</b>{discussion.message}</span>)}</span>}</span>}
   </button>;
@@ -152,7 +159,7 @@ export function App() {
   const visibleProjects = selectedProject === "all" ? projects : projects.filter((project) => project.id === selectedProject);
   const visibleEvents = useMemo(() => events.filter((event) => activityProject === "all" || event.projectId === activityProject).slice(0, 10), [activityProject, events]);
   const activeAgents = visibleProjects.flatMap((project) => project.agents).filter((agent) => ["working", "meeting", "review"].includes(agent.state)).length;
-  const connectionLabel = source === "live" && freshness === "stale" ? "연결됨 · 상태 오래됨" : source === "live" ? "실시간 연결" : source === "demo" ? "DEMO 데이터" : source === "error" ? "서버 연결 끊김" : "연결 확인 중";
+  const connectionLabel = source === "live" && freshness === "stale" ? "연결됨 · 상태 오래됨" : source === "live" ? "실시간 연결" : source === "demo" ? "예시 데이터" : source === "error" ? "서버 연결 끊김" : "연결 확인 중";
   const connectionClass = source === "live" && freshness === "stale" ? "stale" : source;
 
   return <main className="app-shell">
@@ -168,7 +175,7 @@ export function App() {
 
     <section className="dashboard-grid">
       <section className="office-panel" aria-labelledby="office-title">
-        <div className="section-heading"><div><span className="eyebrow">LIVE WORKSPACE</span><h1 id="office-title">AI 직원 업무 현황</h1></div><div className="summary-pills"><span><strong>{visibleProjects.length}</strong> 프로젝트</span><span><strong>{activeAgents}</strong> 활동 중</span></div></div>
+        <div className="section-heading"><div><span className="eyebrow">실시간 업무 공간</span><h1 id="office-title">AI 직원 업무 현황</h1></div><div className="summary-pills"><span><strong>{visibleProjects.length}</strong> 프로젝트</span><span><strong>{activeAgents}</strong> 활동 중</span></div></div>
         {projects.length ? <div className={`office-map ${visibleProjects.length === 1 ? "office-map--single" : ""}`}>
           <div className="corridor-label"><Buildings size={15} /> 중앙 복도</div>
           <div className="rooms-grid">{visibleProjects.map((project) => <ProjectRoom key={project.id} project={project} selected={selectedProject === project.id} onSelect={setSelectedProject} />)}</div>
@@ -177,17 +184,17 @@ export function App() {
       </section>
 
       <aside className="activity-panel" aria-labelledby="activity-title">
-        <div className="activity-panel__heading"><div><span className="eyebrow">WORK SUMMARY</span><h2 id="activity-title">업무 활동 요약</h2></div><span className="activity-count">{visibleEvents.length}</span></div>
+        <div className="activity-panel__heading"><div><span className="eyebrow">지시 기반 업무 흐름</span><h2 id="activity-title">업무 활동 요약</h2></div><span className="activity-count">{visibleEvents.length}</span></div>
         <label className="activity-filter">프로젝트별 보기<select aria-label="활동 프로젝트" value={activityProject} onChange={(event) => setActivityProject(event.target.value)}><option value="all">전체 프로젝트</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
         {detailCaptureEnabled && <span className="detail-capture-badge">로컬 상세 기록 켜짐</span>}
         <div className="timeline" aria-live="polite">{visibleEvents.length ? visibleEvents.map((event) => {
           const project = projects.find((item) => item.id === event.projectId) ?? projects[0];
           const Icon = event.type === "employee.approval.waiting" || ["visual_check", "validation"].includes(event.activityCategory) ? ShieldCheck : event.activityCategory === "code_change" ? Code : event.activityCategory === "research" ? MagnifyingGlass : event.activityCategory === "coordination" || ["employee.completed", "employee.work.completed"].includes(event.type) ? Handshake : ["planning", "document_work", "environment_setup", "automation"].includes(event.activityCategory) || event.type === "directive.submitted" ? CheckCircle : Clock;
           const duration = activityDuration(event);
-          const detail = event.activityLabel ? `${event.employeeName} · ${event.activityLabel}${event.stepCount > 1 ? ` · ${event.stepCount}개 세부 단계` : ""}` : event.employeeName ?? "AI 직원";
-          return <article className="timeline-item" key={event.id}><span className="timeline-item__icon" style={{ "--event-color": project?.color ?? palette[0] }}><Icon size={17} weight="duotone" /></span><div><div className="timeline-item__meta"><span>{project?.shortName ?? "프로젝트"}</span><time>{duration ? `${duration} · ` : ""}{relativeTime(event.at, now)}</time></div><p>{event.message}</p>{event.detail && <blockquote className="timeline-item__detail">{event.detail}</blockquote>}<small>{detail}</small></div></article>;
+          const detail = event.workStage ? `${event.employeeName} · ${event.workStage}${event.stepCount > 1 ? ` · ${event.stepCount}개 세부 작업` : ""}` : event.employeeName ?? "AI 직원";
+          return <article className="timeline-item" key={event.id}><span className="timeline-item__icon" style={{ "--event-color": project?.color ?? palette[0] }}><Icon size={17} weight="duotone" /></span><div><div className="timeline-item__meta"><span>{project?.shortName ?? "프로젝트"}</span><time>{duration ? `${duration} · ` : ""}{relativeTime(event.at, now)}</time></div>{event.workStage && <span className="timeline-item__stage">{event.workStage}</span>}<p>{event.message}</p>{event.detail && <blockquote className="timeline-item__detail">{event.detail}</blockquote>}<small>{detail}</small></div></article>;
         }) : <div className="timeline-empty">이 프로젝트의 최근 업무 활동이 없습니다.</div>}</div>
-        <div className="activity-panel__footer"><span><Clock size={15} /> 세부 작업을 10분 흐름으로 요약</span><span>{source === "live" ? "로컬 API 연결됨" : source === "demo" ? "이벤트 파일 비어 있음 · DEMO" : "재연결 시도 중"}</span></div>
+        <div className="activity-panel__footer"><span><Clock size={15} /> 세부 작업을 10분 흐름으로 요약</span><span>{source === "live" ? "로컬 API 연결됨" : source === "demo" ? "이벤트 파일 비어 있음 · 예시" : "재연결 시도 중"}</span></div>
       </aside>
     </section>
   </main>;

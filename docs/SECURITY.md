@@ -24,8 +24,10 @@ Detailed activity is disabled by default. When `captureDetails` is explicitly en
 
 - A short, redacted `UserPromptSubmit.prompt` as a user directive
 - A short, redacted `tool_input.message` from the allowlisted subagent collaboration tools only
+- Redacted assignment role/name metadata from an allowlisted subagent spawn request
+- A short, redacted Korean-safe summary derived from `SubagentStop.last_assistant_message` as the employee's final handoff
 
-The sink still never stores shell or patch input, arbitrary tool input or output, `tool_response`, transcript paths/content, or `last_assistant_message`. It removes common token patterns, authorization values, email addresses, and absolute paths before persistence; the Node API repeats that redaction. Redaction is best effort and cannot prove that every sensitive value was removed.
+The sink still never stores shell or patch input, arbitrary tool input or output, `tool_response`, main-agent final messages, or transcript paths/content. It removes common token patterns, authorization values, email addresses, absolute paths, English command fragments, and opaque strings before persistence; the Node API repeats that filtering. Known work topics become deterministic Korean presentation summaries. Redaction is best effort and cannot prove that every sensitive value was removed.
 
 The UI shows a local-detail badge while recent events confirm that capture is enabled. Discussion text is returned inside a project only while at least two subagents are actively collaborating. Anyone who can reach the local service, including an allowed Tailscale peer, can read displayed details.
 
@@ -35,7 +37,7 @@ The sink catches all internal errors and exits successfully so observability can
 
 ## Display metadata
 
-Project folder names, role names, and tool names are intentionally displayed. Use non-sensitive project and role names if other people can view the dashboard. The local server does not implement application-level authentication.
+Project folder names and Korean functional role names are intentionally displayed. Raw tool names and source identifiers are not returned as descriptions. Use non-sensitive project names if other people can view the dashboard. The local server does not implement application-level authentication.
 
 ## Network boundary
 

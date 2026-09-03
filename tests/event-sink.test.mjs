@@ -60,24 +60,37 @@ test("event sink captures only redacted opt-in directive and collaboration detai
     encoding: "utf8",
   });
 
-  assert.equal(run({ hook_event_name: "UserPromptSubmit", prompt: "API를 점검해줘 token=super-secret; C:\\Users\\person\\Secret Folder\\private.txt; /mnt/private/key.pem; /private; person@example.com; https://user:pass@example.com; api key = ABCD1234567890; Authorization: Basic dXNlcjpwYXNz" }).status, 0);
+  assert.equal(run({ hook_event_name: "UserPromptSubmit", prompt: "API를 점검해줘. Run npm test -- --reporter=spec with token=super-secret; C:\\Users\\person\\Secret Folder\\private.txt; /mnt/private/key.pem; /private; person@example.com; https://user:pass@example.com; api key = ABCD1234567890; Authorization: Basic dXNlcjpwYXNz" }).status, 0);
   assert.equal(run({ hook_event_name: "PreToolUse", agent_id: "agent-a", tool_name: "collaboration_send_message", tool_input: { message: "테스트 범위를 함께 확정하겠습니다. Bearer abcdefghijklmnop" } }).status, 0);
+  assert.equal(run({ hook_event_name: "PreToolUse", tool_name: "collaboration_spawn_agent", tool_input: { task_name: "korean_display_auditor", agent_type: "office_researcher", message: "화면에 표시되는 영문과 내부 식별자를 조사합니다." } }).status, 0);
+  assert.equal(run({ hook_event_name: "PreToolUse", agent_id: "agent-a", tool_name: "collaboration_send_message", tool_input: { message: `gAAAAA${"A".repeat(80)}` } }).status, 0);
+  assert.equal(run({ hook_event_name: "SubagentStop", agent_id: "agent-a", agent_type: "office_researcher", last_assistant_message: "한국어 표시 경로를 확인했고 회귀 테스트 기준을 인계합니다. Run npm test in C:\\secret\\repo with token=handoff-secret" }).status, 0);
   assert.equal(run({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { message: "never capture arbitrary tool input" } }).status, 0);
   assert.equal(run({ hook_event_name: "PostToolUse", tool_name: "collaboration_send_message", tool_input: { message: "duplicate" }, tool_response: "never capture response" }).status, 0);
 
   const events = (await readFile(eventsPath, "utf8")).trim().split(/\r?\n/).map(JSON.parse);
   assert.equal(events[0].detailKind, "directive");
-  assert.match(events[0].detail, /token=\[secret\]/);
-  assert.match(events[0].detail, /\[path\]/);
-  assert.match(events[0].detail, /\[email\]/);
-  assert.match(events[0].detail, /\[credentials\]/);
-  assert.match(events[0].detail, /api key=\[secret\]/i);
+  assert.match(events[0].detail, /민감정보=\[비밀정보\]/);
+  assert.match(events[0].detail, /\[경로\]/);
+  assert.match(events[0].detail, /\[이메일\]/);
+  assert.match(events[0].detail, /\[인증정보\]/);
   assert.equal(events[1].detailKind, "discussion");
-  assert.match(events[1].detail, /Bearer \[secret\]/);
-  assert.equal("detail" in events[2], false);
+  assert.match(events[1].detail, /접근 토큰 \[비밀정보\]/);
+  assert.equal(events[2].detailKind, "assignment");
+  assert.equal(events[2].assignmentEmployeeName, "리서치 담당");
+  assert.match(events[2].assignmentTask, /영문과 내부 식별자/);
+  assert.equal("assignmentName" in events[2], false);
+  assert.equal("assignmentRole" in events[2], false);
+  assert.match(events[2].detail, /영문과 내부 식별자/);
+  assert.equal(events[3].detailKind, "discussion");
   assert.equal("detail" in events[3], false);
+  assert.equal(events[4].detailKind, "handoff");
+  assert.match(events[4].detail, /회귀 테스트 기준/);
+  assert.equal("detail" in events[5], false);
+  assert.equal("detail" in events[6], false);
   const serialized = JSON.stringify(events);
-  for (const privateValue of ["super-secret", "person@example.com", "private.txt", "/mnt/private", "/private", "user:pass", "ABCD1234567890", "dXNlcjpwYXNz", "abcdefghijklmnop", "never capture arbitrary tool input", "never capture response"]) {
+  for (const privateValue of ["Run npm test", "--reporter=spec", "super-secret", "handoff-secret", "person@example.com", "private.txt", "/mnt/private", "/private", "user:pass", "ABCD1234567890", "dXNlcjpwYXNz", "abcdefghijklmnop", "never capture arbitrary tool input", "never capture response"]) {
     assert.equal(serialized.includes(privateValue), false, `leaked ${privateValue}`);
   }
+  assert.equal(serialized.includes("gAAAAA"), false);
 });

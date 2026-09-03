@@ -26,7 +26,8 @@ Sanitized live mode, captured from the real local API with synthetic public even
 - Repeated tool start/finish events become one functional activity card per employee and category over a 10-minute work stream
 - Stable project-room positions during ordinary activity; rooms move only for project lifecycle changes
 - A clear demo state when no local event file exists
-- Optional local-only directive and collaboration details, redacted before storage and shown at the meeting table only when two or more subagents collaborate
+- Korean directive-to-stage summaries that connect the CEO request, employee assignments, ongoing work, collaboration, validation, and handoff
+- Optional local-only directive, collaboration, and subagent handoff details, redacted before storage; opaque or untranslated values use a Korean safe fallback
 
 ## Quick start on Windows
 
@@ -100,7 +101,7 @@ Static hosting can display only the demo UI; it cannot read the private event fi
 
 ## Privacy model
 
-The event sink uses a strict allowlist. By default it does not persist prompts, commands, tool input/output, file contents, credentials, full working-directory paths, or raw session/turn/worker/tool-use identifiers. When local detailed activity is explicitly enabled, it additionally stores only short, redacted user directives and the `message` field of allowlisted subagent collaboration tools. It never stores shell or patch inputs, arbitrary tool responses, transcripts, or subagent final messages. The browser API applies a second allowlist and redaction pass.
+The event sink uses a strict allowlist. By default it does not persist prompts, commands, tool input/output, file contents, credentials, full working-directory paths, or raw session/turn/worker/tool-use identifiers. When local detailed activity is explicitly enabled, it additionally stores only short, redacted Korean-safe summaries of user directives, allowlisted subagent collaboration messages, assignment metadata, and the final handoff message from `SubagentStop`. It never stores shell or patch inputs, arbitrary tool responses, or transcripts. The browser API applies a second allowlist, redaction pass, and Korean display normalization; opaque encrypted text and untranslated English prose are never returned as raw work descriptions.
 
 Redaction is best effort, not a guarantee. Keep the service on localhost, and remember that any permitted Tailscale viewer can read enabled details. The capture fields are based on the [official OpenAI Codex Hooks documentation](https://learn.chatgpt.com/docs/hooks).
 
@@ -113,7 +114,7 @@ npm test
 npm run build
 ```
 
-The current suite contains 38 tests covering event-sink privacy and opt-in redaction, chat/project filtering, inactive project cleanup, repeatable hook merging, event sanitization, opaque identifiers, long-term activity summaries, employee retirement, orphan cleanup and functional naming, stable project ordering, project completion and resumption, stale-state boundaries, collaboration discussions, localhost-only serving, rotated event files, and static hosting output. The complete staged build record and results are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+The current suite contains 42 tests covering event-sink privacy and opt-in redaction, Korean directive/assignment/stage/handoff summaries, directive-boundary isolation, mixed-language command suppression, legacy-markup normalization, chat/project filtering, inactive project cleanup, repeatable hook merging, event sanitization, opaque identifiers, long-term activity summaries, employee retirement, stable project ordering, collaboration discussions, localhost-only serving, rotated event files, and static hosting output. The complete staged build record and results are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Repository map
 

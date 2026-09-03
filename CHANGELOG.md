@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here.
 
+## 0.1.7 — 2026-09-03
+
+- Linked activity summaries to the current CEO directive and a Korean work stage.
+- Added project-room summaries for the current directive and recent employee assignments.
+- Converted known English work topics to Korean and suppressed opaque encrypted or identifier-like text.
+- Kept activity summaries, assignments, and discussions bound to the CEO directive that created them.
+- Stored only Korean-safe assignment and handoff summaries instead of raw task slugs or mixed-language commands.
+- Added redacted subagent handoff summaries while keeping commands, tool output, and transcripts excluded.
+
 ## 0.1.6 — 2026-09-03
 
 - Hid lifecycle-only chat sessions and projects without activity for 24 hours.
