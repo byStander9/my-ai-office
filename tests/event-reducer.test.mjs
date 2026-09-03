@@ -399,6 +399,7 @@ test("links Korean CEO instructions to assignments, work stages, and collaborati
   const project = snapshot.projects[0];
   assert.match(project.currentDirective.title, /CI 오류 원인/);
   assert.equal(project.assignments[0].employeeName, "리서치 담당");
+  assert.equal(project.assignments[0].employeeRole, "자료·근거 조사");
   assert.match(project.assignments[0].task, /대시보드 화면의 영문과 내부 식별자/);
   assert.equal(project.discussions.length, 2);
   assert.ok(project.discussions.every((discussion) => /[가-힣]/.test(discussion.message)));
@@ -432,6 +433,7 @@ test("keeps work summaries, assignments, and discussions separated by CEO direct
   assert.equal(snapshot.projects[0].assignments.length, 1);
   assert.match(snapshot.projects[0].assignments[0].task, /결제 화면/);
   assert.equal(snapshot.projects[0].assignments[0].employeeName, "화면 검증 담당");
+  assert.match(snapshot.events.find((item) => item.detailKind === "assignment")?.message ?? "", /업무를 배정했습니다/);
 });
 
 test("converts mixed Korean and English commands into a Korean-safe display summary", () => {

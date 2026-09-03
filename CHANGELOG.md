@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## 0.1.8 — 2026-09-03
+
+- Improved Korean assignment sentence grammar.
+- Kept Korean employee roles specific when a safe assignment name is available.
+
 ## 0.1.7 — 2026-09-03
 
 - Linked activity summaries to the current CEO directive and a Korean work stage.
