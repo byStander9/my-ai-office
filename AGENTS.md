@@ -13,6 +13,8 @@ Before making substantial visual changes, use the Product Design plugin's `get-c
 - Keep project-room positions stable during ordinary activity updates. Only project additions, removals, completion, or resumption may change room order.
 - Keep completed employees in recent activity, but remove them from project rooms after a short handoff grace period. Hide employees with no activity for 30 minutes as orphan cleanup and show them again on their next event. Name employees by their functional role; avoid raw framework labels such as `default` and generic labels such as "main employee."
 - Present the right-side activity feed as long-term work summaries. Group repeated tool start/finish events by employee and safe work category over a 10-minute activity gap; keep directives, assignments, handoffs, approvals, compaction, and session lifecycle events distinct.
+- Show only projects that have a Codex work signal such as tool, subagent, or approval activity. Hide a project after 24 hours without work and restore it when new work arrives.
+- Keep the office-map project filter separate from the right-side activity project filter. Detailed directives and collaboration messages are local opt-in data: public/default capture stays off, redaction happens before persistence and again at the API boundary, and discussion text appears only when at least two subagents collaborate.
 
 When implementing from a selected generated mock, treat that image as the source of truth for layout, component anatomy, density, spacing, color, typography, visible content, and hierarchy.
 
