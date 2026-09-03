@@ -15,7 +15,7 @@ test("serves static files and reduces rotated then current JSONL through GET /ap
   const eventsPath = join(root, "events.jsonl");
   await mkdir(clientDir);
   await writeFile(join(clientDir, "index.html"), "<main>office</main>", "utf8");
-  await writeFile(`${eventsPath}.1`, `${line({ id: "old", at: "2026-08-26T05:59:58.000Z", type: "session.started", projectKey: "old-project", projectName: "Old Project", sessionId: "session-old", appendSeq: 1 })}\n`, "utf8");
+  await writeFile(`${eventsPath}.1`, `${line({ id: "old", at: "2026-08-26T05:59:58.000Z", type: "employee.started", projectKey: "old-project", projectName: "Old Project", sessionId: "session-old", employeeId: "employee-old", employeeRole: "office_researcher", appendSeq: 1 })}\n`, "utf8");
   await writeFile(eventsPath, `${line({ id: "new", at: "2026-08-26T06:00:00.000Z", type: "employee.started", projectKey: "new-project", projectName: "New Project", sessionId: "session-new", employeeId: "employee-9", employeeRole: "office_builder", appendSeq: 2 })}\n`, "utf8");
 
   const server = createOfficeServer({ eventsPath, clientDir, now: () => new Date("2026-08-26T06:00:01.000Z") });

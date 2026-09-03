@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ACTIVITY_GROUP_GAP_MS, EMPLOYEE_HANDOFF_MS, EMPLOYEE_INACTIVE_MS, reduceEvents, sanitizeEvent } from "../server/events-reducer.mjs";
+import { ACTIVITY_GROUP_GAP_MS, EMPLOYEE_HANDOFF_MS, EMPLOYEE_INACTIVE_MS, PROJECT_INACTIVE_MS, reduceEvents, sanitizeEvent } from "../server/events-reducer.mjs";
 
 function event(overrides = {}) {
   return {
     schemaVersion: 1,
     id: "event-1",
     at: "2026-08-26T06:00:00.000Z",
-    type: "turn.stopping",
-    status: "stopping",
+    type: "employee.tool.started",
+    status: "working",
     project: { key: "project-a", name: "Project A", cwd: "C:\\secret\\workspace" },
     sessionId: "session-main",
     appendSeq: 1,
@@ -27,11 +27,18 @@ test("sanitizes input to the supported event schema", () => {
   assert.equal("prompt" in clean, false);
   assert.equal("toolInput" in clean, false);
   assert.equal("toolOutput" in clean, false);
+  const untrustedDetail = sanitizeEvent(event({ detailKind: "discussion", detail: "should not pass without opt-in" }));
+  assert.equal(untrustedDetail.detail, null);
+  assert.equal(untrustedDetail.detailKind, null);
 });
 
 test("keeps turn.stopping visible until two quiet seconds have elapsed", () => {
-  const beforeQuiet = reduceEvents([event()], { now: new Date("2026-08-26T06:00:01.999Z") });
-  const afterQuiet = reduceEvents([event()], { now: new Date("2026-08-26T06:00:02.000Z") });
+  const events = [
+    event({ id: "work", appendSeq: 1 }),
+    event({ id: "stop", type: "turn.stopping", status: "stopping", appendSeq: 2 }),
+  ];
+  const beforeQuiet = reduceEvents(events, { now: new Date("2026-08-26T06:00:01.999Z") });
+  const afterQuiet = reduceEvents(events, { now: new Date("2026-08-26T06:00:02.000Z") });
   assert.equal(beforeQuiet.projects[0].employees[0].status, "stopping");
   assert.equal(afterQuiet.projects[0].employees[0].status, "idle");
 });
@@ -124,6 +131,7 @@ test("removes completed subagents after a short handoff period while keeping the
 
 test("removes ended main sessions after handoff without losing the project ended state", () => {
   const events = [
+    event({ id: "work", type: "employee.tool.started", status: "working", sessionId: "session-a", appendSeq: 0 }),
     event({ id: "session-start", type: "session.started", status: "online", sessionId: "session-a", appendSeq: 1 }),
     event({ id: "session-end", type: "session.ended", status: "offline", sessionId: "session-a", appendSeq: 2 }),
   ];
@@ -166,6 +174,7 @@ test("hides an employee after thirty minutes without activity while preserving a
 
 test("ignores an inactive orphan main session when a current main session has ended", () => {
   const snapshot = reduceEvents([
+    event({ id: "work", type: "employee.tool.started", status: "working", sessionId: "session-current", appendSeq: 0 }),
     event({ id: "orphan-start", type: "session.started", status: "online", sessionId: "session-orphan", appendSeq: 1 }),
     event({ id: "current-start", at: "2026-08-26T06:40:00.000Z", type: "session.started", status: "online", sessionId: "session-current", appendSeq: 2 }),
     event({ id: "current-end", at: "2026-08-26T06:40:01.000Z", type: "session.ended", status: "offline", sessionId: "session-current", appendSeq: 3 }),
@@ -175,6 +184,7 @@ test("ignores an inactive orphan main session when a current main session has en
   assert.equal(snapshot.projects[0].employees.length, 1);
 
   const orphanOnly = reduceEvents([
+    event({ id: "work", type: "employee.tool.started", status: "working", sessionId: "session-orphan", appendSeq: 0 }),
     event({ id: "orphan-start", type: "session.started", status: "online", sessionId: "session-orphan", appendSeq: 1 }),
   ], { now: new Date("2026-08-26T06:40:02.000Z") });
   assert.equal(orphanOnly.projects[0].ended, false);
@@ -214,6 +224,7 @@ test("groups two active employees in the same project into a meeting", () => {
 
 test("marks a project ended only when all main sessions are offline", () => {
   const snapshot = reduceEvents([
+    event({ id: "work", type: "employee.tool.started", status: "working", sessionId: "session-a", appendSeq: 0 }),
     event({ id: "session-a-start", type: "session.started", status: "online", sessionId: "session-a", appendSeq: 1 }),
     event({ id: "session-b-start", type: "session.started", status: "online", sessionId: "session-b", appendSeq: 2 }),
     event({ id: "session-a-end", type: "session.ended", status: "offline", sessionId: "session-a", appendSeq: 3 }),
@@ -221,6 +232,7 @@ test("marks a project ended only when all main sessions are offline", () => {
   assert.equal(snapshot.projects[0].ended, false);
 
   const ended = reduceEvents([
+    event({ id: "work", type: "employee.tool.started", status: "working", sessionId: "session-a", appendSeq: 0 }),
     event({ id: "session-a-start", type: "session.started", status: "online", sessionId: "session-a", appendSeq: 1 }),
     event({ id: "session-a-end", type: "session.ended", status: "offline", sessionId: "session-a", appendSeq: 2 }),
   ], { now: new Date("2026-08-26T06:00:01.000Z") });
@@ -230,6 +242,7 @@ test("marks a project ended only when all main sessions are offline", () => {
 
 test("ends a multi-session project only after every main session ends", () => {
   const snapshot = reduceEvents([
+    event({ id: "work", type: "employee.tool.started", status: "working", sessionId: "session-a", appendSeq: 0 }),
     event({ id: "session-a-start", type: "session.started", status: "online", sessionId: "session-a", appendSeq: 1 }),
     event({ id: "session-b-start", type: "session.started", status: "online", sessionId: "session-b", appendSeq: 2 }),
     event({ id: "session-a-end", type: "session.ended", status: "offline", sessionId: "session-a", appendSeq: 3 }),
@@ -250,6 +263,7 @@ test("keeps an ended session offline when a delayed tool event arrives", () => {
 
 test("resumes an ended project when a new main session starts", () => {
   const snapshot = reduceEvents([
+    event({ id: "work", type: "employee.tool.started", status: "working", sessionId: "session-a", appendSeq: 0 }),
     event({ id: "old-start", type: "session.started", status: "online", sessionId: "session-a", appendSeq: 1 }),
     event({ id: "old-end", type: "session.ended", status: "offline", sessionId: "session-a", appendSeq: 2 }),
     event({ id: "new-start", type: "session.started", status: "online", sessionId: "session-b", appendSeq: 3 }),
@@ -264,4 +278,61 @@ test("returns demo mode only when there are no valid events", () => {
   assert.equal(demo.freshness, "demo");
   assert.equal(demo.lastEventAt, null);
   assert.equal(reduceEvents([event()]).mode, "live");
+});
+
+test("hides lifecycle-only chats until a Codex work signal appears", () => {
+  const chat = [
+    event({ id: "chat-start", type: "session.started", status: "online", appendSeq: 1 }),
+    event({ id: "chat-prompt", type: "directive.submitted", status: "working", appendSeq: 2 }),
+    event({ id: "chat-stop", type: "turn.stopping", status: "stopping", appendSeq: 3 }),
+  ];
+  const hidden = reduceEvents(chat, { now: new Date("2026-08-26T06:00:01.000Z") });
+  assert.deepEqual(hidden.projects, []);
+  assert.deepEqual(hidden.events, []);
+  assert.equal(hidden.mode, "live");
+
+  const visible = reduceEvents([...chat, event({ id: "tool", type: "employee.tool.started", status: "working", tool: "Bash", appendSeq: 4 })], { now: new Date("2026-08-26T06:00:01.000Z") });
+  assert.equal(visible.projects.length, 1);
+  assert.ok(visible.events.some((item) => item.type === "activity.summary"));
+});
+
+test("hides inactive projects at 24 hours and restores them on later work", () => {
+  const initial = [event({ id: "work", type: "employee.tool.started", status: "working", appendSeq: 1 })];
+  const before = reduceEvents(initial, { now: new Date(Date.parse("2026-08-26T06:00:00.000Z") + PROJECT_INACTIVE_MS - 1) });
+  const atBoundary = reduceEvents(initial, { now: new Date(Date.parse("2026-08-26T06:00:00.000Z") + PROJECT_INACTIVE_MS) });
+  assert.equal(before.projects.length, 1);
+  assert.deepEqual(atBoundary.projects, []);
+  assert.deepEqual(atBoundary.events, []);
+
+  const lateChatAt = new Date(Date.parse("2026-08-26T06:00:00.000Z") + PROJECT_INACTIVE_MS + 1).toISOString();
+  const lateChat = reduceEvents([...initial, event({ id: "chat", at: lateChatAt, type: "directive.submitted", status: "working", appendSeq: 2 })], { now: new Date(lateChatAt) });
+  assert.deepEqual(lateChat.projects, []);
+
+  const restoredAt = lateChatAt;
+  const restored = reduceEvents([...initial, event({ id: "later", at: restoredAt, type: "employee.tool.started", status: "working", appendSeq: 2 })], { now: new Date(restoredAt) });
+  assert.equal(restored.projects.length, 1);
+});
+
+test("returns redacted details and discussions only for two active subagents", () => {
+  const mainAndOne = reduceEvents([
+    event({ id: "directive", type: "directive.submitted", detailKind: "directive", detail: "구현 범위를 확정합니다.", detailCapture: true, appendSeq: 1 }),
+    event({ id: "sub-a", type: "employee.started", employeeId: "agent-a", employeeRole: "office_builder", appendSeq: 2 }),
+    event({ id: "talk-a", type: "employee.tool.started", employeeId: "agent-a", employeeRole: "office_builder", tool: "collaborationsend_message", detailKind: "discussion", detail: "C:\\Users\\private\\Secret Folder\\work.txt; /mnt/private/key.pem; /private; api key = ABCD1234567890; Authorization: Basic dXNlcjpwYXNz", detailCapture: true, appendSeq: 3 }),
+  ], { now: new Date("2026-08-26T06:00:01.000Z") });
+  assert.deepEqual(mainAndOne.projects[0].discussions, []);
+  assert.equal(mainAndOne.detailCaptureEnabled, true);
+  assert.equal(JSON.stringify(mainAndOne).includes("Secret Folder"), false);
+  assert.equal(JSON.stringify(mainAndOne).includes("/mnt/private"), false);
+  assert.equal(JSON.stringify(mainAndOne).includes("ABCD1234567890"), false);
+  assert.equal(JSON.stringify(mainAndOne).includes("dXNlcjpwYXNz"), false);
+
+  const twoSubagents = reduceEvents([
+    event({ id: "sub-a", type: "employee.started", employeeId: "agent-a", employeeRole: "office_builder", appendSeq: 1 }),
+    event({ id: "sub-b", type: "employee.started", employeeId: "agent-b", employeeRole: "office_reviewer", appendSeq: 2 }),
+    event({ id: "talk-a", type: "employee.tool.started", employeeId: "agent-a", employeeRole: "office_builder", tool: "collaborationsend_message", detailKind: "discussion", detail: "구현 경계를 리뷰 담당과 확인합니다.", detailCapture: true, appendSeq: 3 }),
+    event({ id: "talk-b", type: "employee.tool.started", employeeId: "agent-b", employeeRole: "office_reviewer", tool: "collaborationfollowup_task", detailKind: "discussion", detail: "회귀 테스트 기준을 전달합니다.", detailCapture: true, appendSeq: 4 }),
+  ], { now: new Date("2026-08-26T06:00:01.000Z") });
+  assert.equal(twoSubagents.projects[0].discussions.length, 2);
+  assert.match(twoSubagents.projects[0].discussions[0].employeeId, /^emp-[a-f0-9]{12}$/);
+  assert.equal(JSON.stringify(twoSubagents).includes("agent-a"), false);
 });

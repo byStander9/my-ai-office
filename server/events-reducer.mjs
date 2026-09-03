@@ -5,8 +5,15 @@ const STALE_AFTER_MS = 5 * 60 * 1_000;
 const EMPLOYEE_HANDOFF_MS = 15_000;
 const EMPLOYEE_INACTIVE_MS = 30 * 60 * 1_000;
 const ACTIVITY_GROUP_GAP_MS = 10 * 60 * 1_000;
+const PROJECT_INACTIVE_MS = 24 * 60 * 60 * 1_000;
+const DISCUSSION_MAX_AGE_MS = 30 * 60 * 1_000;
 const ACTIVE_STATUSES = new Set(["working", "compacting", "stopping"]);
 const RESTART_EVENT_TYPES = new Set(["session.started", "employee.started", "employee.spawned", "employee.work.started"]);
+const CODEX_WORK_EVENT_TYPES = new Set([
+  "employee.spawned", "employee.started", "employee.completed", "employee.work.started",
+  "employee.work.completed", "employee.tool.started", "employee.tool.completed", "employee.approval.waiting",
+]);
+const DETAIL_KINDS = new Set(["directive", "discussion"]);
 
 const ALLOWED_EVENT_TYPES = new Set([
   "session.started",
@@ -29,6 +36,7 @@ const ALLOWED_EVENT_TYPES = new Set([
 const SAFE_TOP_LEVEL_KEYS = new Set([
   "schemaVersion", "id", "at", "type", "status", "project", "sessionId",
   "turnId", "employeeId", "employeeRole", "tool", "toolUseId", "appendSeq",
+  "detail", "detailKind", "detailCapture",
 ]);
 
 function safeText(value, maxLength = 160) {
@@ -40,6 +48,23 @@ function safeText(value, maxLength = 160) {
 function safeTimestamp(value) {
   const time = Date.parse(value);
   return Number.isFinite(time) ? new Date(time).toISOString() : null;
+}
+
+function safeDetail(value) {
+  const text = safeText(value, 280);
+  if (!text) return null;
+  return text
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, " ")
+    .replace(/-----BEGIN[^-]*PRIVATE KEY-----.*?-----END[^-]*PRIVATE KEY-----/gis, "[private key]")
+    .replace(/\b(?:sk|ghp|github_pat|glpat|xox[baprs])[-_][A-Za-z0-9_-]{12,}\b/gi, "[secret]")
+    .replace(/\bAKIA[A-Z0-9]{16}\b/g, "[secret]")
+    .replace(/\bAuthorization\s*:\s*[^\r\n,;]+/gi, "Authorization: [secret]")
+    .replace(/\bBearer\s+[^\s,;]+/gi, "Bearer [secret]")
+    .replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^/\s:@]+:[^@\s/]+@/gi, "$1[credentials]@")
+    .replace(/\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b/g, "[email]")
+    .replace(/\b[A-Za-z]:\\[^\r\n,;]+/g, "[path]")
+    .replace(/(^|[^\w:])\/(?:[A-Za-z0-9._~-]+(?:\/[^\s,;]+)*)/g, "$1[path]")
+    .replace(/\b(password|passwd|token|api[\s_-]*key|secret)\s*[:=]\s*[^\s,;]+/gi, "$1=[secret]");
 }
 
 function opaqueId(prefix, value) {
@@ -60,6 +85,8 @@ export function sanitizeEvent(input) {
   const type = safeText(clean.type, 80);
   const at = safeTimestamp(clean.at);
   if (!projectKey || !projectName || !type || !at) return null;
+  const detailKind = safeText(clean.detailKind, 40);
+  const detailCapture = clean.detailCapture === true;
 
   return {
     schemaVersion: Number.isInteger(clean.schemaVersion) ? clean.schemaVersion : 1,
@@ -75,6 +102,9 @@ export function sanitizeEvent(input) {
     tool: safeText(clean.tool, 120),
     toolUseId: safeText(clean.toolUseId, 160),
     appendSeq: Number.isSafeInteger(clean.appendSeq) ? clean.appendSeq : null,
+    detail: detailCapture && DETAIL_KINDS.has(detailKind) ? safeDetail(clean.detail) : null,
+    detailKind: detailCapture && DETAIL_KINDS.has(detailKind) ? detailKind : null,
+    detailCapture,
   };
 }
 
@@ -205,6 +235,10 @@ function updateActivitySummary(recent, activityGroups, event, employee, projectI
   summary.employeeName = employee.name;
   summary._order = event.appendSeq ?? Date.parse(event.at);
   summary.message = `${employee.name}이(가) ${activityLabel} 업무를 진행했습니다.`;
+  if (event.detail) {
+    summary.detail = event.detail;
+    summary.detailKind = event.detailKind;
+  }
 }
 
 function closeActivitySummaries(activityGroups, projectId, employeeId) {
@@ -247,17 +281,19 @@ export function reduceEvents(rawEvents, { now = new Date() } = {}) {
   const projects = new Map();
   const recent = [];
   const activityGroups = new Map();
-  const lastEventAt = events.length ? events[events.length - 1].at : null;
-  const freshness = !lastEventAt ? "demo" : nowMs - Date.parse(lastEventAt) > STALE_AFTER_MS ? "stale" : "fresh";
 
   for (const event of events) {
     let project = projects.get(event.project.key);
     if (!project) {
-      project = { key: event.project.key, name: event.project.name, lastActivityAt: event.at, employees: new Map() };
+      project = { key: event.project.key, name: event.project.name, lastActivityAt: event.at, lastWorkAt: null, employees: new Map(), hasCodexWork: false, discussions: [] };
       projects.set(project.key, project);
     }
     project.name = event.project.name;
     project.lastActivityAt = event.at;
+    if (CODEX_WORK_EVENT_TYPES.has(event.type)) {
+      project.hasCodexWork = true;
+      project.lastWorkAt = event.at;
+    }
 
     const identity = employeeIdentity(event);
     const existingEmployee = project.employees.get(identity.id);
@@ -279,6 +315,16 @@ export function reduceEvents(rawEvents, { now = new Date() } = {}) {
     employee.tool = event.tool;
     project.employees.set(identity.id, employee);
 
+    if (event.detailKind === "discussion" && event.detail && event.employeeId) {
+      project.discussions.push({
+        id: opaqueId("discussion", event.id),
+        at: event.at,
+        employeeId: identity.id,
+        employeeName: identity.name,
+        message: event.detail,
+      });
+    }
+
     const isToolActivity = ["employee.tool.started", "employee.tool.completed"].includes(event.type) && event.status !== "completed";
     if (isToolActivity) {
       updateActivitySummary(recent, activityGroups, event, identity, project.key);
@@ -294,22 +340,40 @@ export function reduceEvents(rawEvents, { now = new Date() } = {}) {
           employeeId: identity.id,
           employeeName: identity.name,
           message: activityMessage(event, identity),
+          detail: event.detail,
+          detailKind: event.detailKind,
           _order: event.appendSeq ?? Date.parse(event.at),
         });
       }
     }
   }
 
-  const projectSnapshots = [...projects.values()].map((project) => {
+  const visibleProjects = [...projects.values()].filter((project) => (
+    project.hasCodexWork && nowMs - Date.parse(project.lastWorkAt) < PROJECT_INACTIVE_MS
+  ));
+  const lastEventAt = visibleProjects.length
+    ? visibleProjects.reduce((latest, project) => Date.parse(project.lastActivityAt) > Date.parse(latest) ? project.lastActivityAt : latest, visibleProjects[0].lastActivityAt)
+    : null;
+  const freshness = !events.length ? "demo" : !lastEventAt ? "stale" : nowMs - Date.parse(lastEventAt) > STALE_AFTER_MS ? "stale" : "fresh";
+
+  const projectSnapshots = visibleProjects.map((project) => {
     const allEmployees = [...project.employees.values()];
     const ended = projectEnded(allEmployees, nowMs);
     let employees = allEmployees.filter((employee) => isVisibleEmployee(employee, nowMs)).sort((a, b) => Date.parse(b.lastActivityAt) - Date.parse(a.lastActivityAt));
     if (employees.filter((employee) => ACTIVE_STATUSES.has(employee.status)).length >= 2) {
       employees = employees.map((employee) => ACTIVE_STATUSES.has(employee.status) ? { ...employee, status: "meeting" } : employee);
     }
-    employees = employees.map(({ assignmentIsSpecific, terminalAt, ...employee }) => ({ ...employee, freshness }));
-    return { key: project.key, name: project.name, status: projectStatus(employees, ended), ended, freshness, lastActivityAt: project.lastActivityAt, employees };
+    const projectFreshness = nowMs - Date.parse(project.lastActivityAt) > STALE_AFTER_MS ? "stale" : "fresh";
+    employees = employees.map(({ assignmentIsSpecific, terminalAt, ...employee }) => ({ ...employee, freshness: projectFreshness }));
+    const collaboratingSubagents = employees.filter((employee) => employee.kind === "subagent" && employee.status === "meeting");
+    const discussions = collaboratingSubagents.length >= 2
+      ? project.discussions.filter((discussion) => nowMs - Date.parse(discussion.at) <= DISCUSSION_MAX_AGE_MS).slice(-5).reverse()
+      : [];
+    return { key: project.key, name: project.name, status: projectStatus(employees, ended), ended, freshness: projectFreshness, lastActivityAt: project.lastActivityAt, employees, discussions };
   }).sort((a, b) => Date.parse(b.lastActivityAt) - Date.parse(a.lastActivityAt));
+
+  const visibleProjectKeys = new Set(projectSnapshots.map((project) => project.key));
+  const detailCaptureEnabled = events.some((event) => event.detailCapture && nowMs - Date.parse(event.at) <= STALE_AFTER_MS);
 
   return {
     mode: events.length ? "live" : "demo",
@@ -317,9 +381,10 @@ export function reduceEvents(rawEvents, { now = new Date() } = {}) {
     lastEventAt,
     generatedAt: now.toISOString(),
     quietAfterMs: QUIET_AFTER_MS,
+    detailCaptureEnabled,
     projects: projectSnapshots,
-    events: recent.sort((a, b) => Date.parse(b.at) - Date.parse(a.at) || b._order - a._order).slice(0, 80).map(({ _order, _toolUseIds, ...event }) => event),
+    events: recent.filter((event) => visibleProjectKeys.has(event.projectId)).sort((a, b) => Date.parse(b.at) - Date.parse(a.at) || b._order - a._order).slice(0, 80).map(({ _order, _toolUseIds, ...event }) => event),
   };
 }
 
-export { ACTIVITY_GROUP_GAP_MS, EMPLOYEE_HANDOFF_MS, EMPLOYEE_INACTIVE_MS, QUIET_AFTER_MS, STALE_AFTER_MS };
+export { ACTIVITY_GROUP_GAP_MS, EMPLOYEE_HANDOFF_MS, EMPLOYEE_INACTIVE_MS, PROJECT_INACTIVE_MS, QUIET_AFTER_MS, STALE_AFTER_MS };
