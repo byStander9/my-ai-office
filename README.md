@@ -18,6 +18,7 @@ Sanitized live mode, captured from the real local API with synthetic public even
 - Main agents and functional subagents grouped by project
 - Working, collaborating, waiting-for-approval, idle, and stale states
 - A long-term work-summary timeline refreshed every 1.5 seconds
+- A scrollable activity panel that keeps all 80 activities returned by the local API available
 - An independent project selector for the activity panel
 - Automatic meeting-table grouping when two or more employees work on one project
 - Functional employee names derived from safe role/tool metadata instead of framework labels such as `default`
@@ -27,6 +28,7 @@ Sanitized live mode, captured from the real local API with synthetic public even
 - Stable project-room positions during ordinary activity; rooms move only for project lifecycle changes
 - A clear demo state when no local event file exists
 - Korean directive-to-stage summaries that connect the CEO request, employee assignments, ongoing work, collaboration, validation, and handoff
+- Compact CEO directives in the office overview, with the full redacted directive available in a scrollable focused-project view
 - Optional local-only directive, collaboration, and subagent handoff details, redacted before storage; opaque or untranslated values use a Korean safe fallback
 
 ## Quick start on Windows
@@ -114,7 +116,7 @@ npm test
 npm run build
 ```
 
-The current suite contains 42 tests covering event-sink privacy and opt-in redaction, Korean directive/assignment/stage/handoff summaries, directive-boundary isolation, mixed-language command suppression, legacy-markup normalization, chat/project filtering, inactive project cleanup, repeatable hook merging, event sanitization, opaque identifiers, long-term activity summaries, employee retirement, stable project ordering, collaboration discussions, localhost-only serving, rotated event files, and static hosting output. The complete staged build record and results are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+The current suite contains 49 tests covering event-sink privacy and opt-in redaction, Korean directive/assignment/stage/handoff summaries, unknown-English placeholder prevention, long-directive preservation, Unicode-path redaction, directive-boundary isolation, mixed-language command suppression, legacy-markup normalization, chat/project filtering, inactive project cleanup, repeatable hook merging, event sanitization, opaque identifiers, long-term activity summaries, employee retirement, stable project ordering, collaboration discussions, localhost-only serving, rotated event files, and static hosting output. The complete staged build record and results are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Repository map
 

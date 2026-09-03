@@ -50,7 +50,9 @@ The activity panel keeps directives, assignments, handoffs, approvals, compactio
 
 Lifecycle-only sessions are now treated as simple chats and omitted until a tool, subagent, or approval event proves Codex work. A project leaves the office after 24 hours without activity and returns automatically with its next work event. The right panel has its own project selector so reviewing one project's history does not rearrange or narrow the office map.
 
-Concrete text remains a local opt-in. When enabled, the sink stores only short, redacted Korean-safe summaries derived from user directives, allowlisted assignment/collaboration fields, and a subagent final handoff message. The API repeats the filtering, suppresses encrypted/identifier-like text, and converts known English work topics to Korean summaries. Meeting discussions appear only while at least two subagents collaborate. Shell/patch input, general tool I/O, and transcripts remain excluded.
+Concrete text remains a local opt-in. When enabled, the sink stores redacted Korean-safe user directives up to 4,000 characters, plus short summaries from allowlisted assignment/collaboration fields and a subagent final handoff message. The API repeats the filtering, suppresses encrypted/identifier-like text, converts known English work topics to Korean summaries, and uses a neutral Korean term for unknown English instead of repeating the directive placeholder. Meeting discussions appear only while at least two subagents collaborate. Shell/patch input, general tool I/O, and transcripts remain excluded.
+
+Overview cards keep a two-line directive preview. Selecting the directive opens that project alone and exposes the preserved directive in a keyboard-scrollable region. The right activity panel is height constrained on desktop and scrolls through every activity returned by the API instead of silently limiting the list to ten.
 
 **Result:** the office shows active collaboration, approval waits, quiet transitions, disconnected state, and stale state separately.
 
@@ -89,7 +91,7 @@ npm run build
 
 Expected results:
 
-- 38/38 Node tests pass.
+- 49/49 Node tests pass.
 - Vite production build succeeds.
 - `dist/client/index.html`, `dist/server/index.js`, and `dist/.openai/hosting.json` are generated.
 - The local server listens only on `127.0.0.1`.
