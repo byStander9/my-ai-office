@@ -62,7 +62,7 @@ def _details_enabled(base_dir: Path) -> bool:
 
 
 def _redacted_detail(value: Any, limit: int = 280) -> str | None:
-    text = _text(value, 2_000)
+    text = _text(value, max(2_000, limit))
     if not text:
         return None
     text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", " ", text)
@@ -73,8 +73,9 @@ def _redacted_detail(value: Any, limit: int = 280) -> str | None:
     text = re.sub(r"\bBearer\s+[^\s,;]+", "접근 토큰 [비밀정보]", text, flags=re.I)
     text = re.sub(r"\b([a-z][a-z0-9+.-]*://)[^/\s:@]+:[^@\s/]+@", r"\1[인증정보]@", text, flags=re.I)
     text = re.sub(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b", "[이메일]", text)
+    text = re.sub(r"\\\\[^\s\\,;]+(?:\\[^\s,;]+)+", "[경로]", text)
     text = re.sub(r"\b[A-Za-z]:\\[^\r\n,;]+", "[경로]", text)
-    text = re.sub(r"(?<![\w:])/(?:[A-Za-z0-9._~-]+(?:/[^\s,;]+)*)", "[경로]", text)
+    text = re.sub(r"(?<![\w:/])/(?:[^\s/,;]+(?:/[^\s,;]+)*)", "[경로]", text)
     text = re.sub(r"\b(password|passwd|token|api[\s_-]*key|secret)\s*[:=]\s*[^\s,;]+", "민감정보=[비밀정보]", text, flags=re.I)
     text = " ".join(text.split())
     return text[:limit] if text else None
@@ -111,11 +112,19 @@ TOPIC_LABELS = (
 
 ALLOWED_TERMS = {
     "api": "API",
+    "ceo": "CEO",
     "ci": "CI",
+    "codex": "Codex",
+    "docx": "워드 문서",
     "github": "GitHub",
+    "json": "JSON",
+    "md": "마크다운 문서",
     "node": "Node",
     "npu": "NPU",
+    "pdf": "PDF",
+    "pptx": "파워포인트 파일",
     "readme": "README",
+    "yaml": "YAML",
 }
 
 ROLE_ASSIGNMENTS = {
@@ -136,7 +145,7 @@ def _topic_summary(value: str, kind: str) -> str | None:
         if pattern.search(value) and label not in topics:
             topics.append(label)
     if not topics:
-        return "사용자 지시사항" if kind == "directive" else None
+        return None
     subject = "·".join(topics[:3])
     if kind == "discussion":
         return f"{subject}에 관한 진행 상황을 공유했습니다."
@@ -148,8 +157,16 @@ def _topic_summary(value: str, kind: str) -> str | None:
 
 
 def _korean_safe_detail(value: Any, kind: str) -> str | None:
-    text = _meaningful_detail(value)
+    limit = 4_000 if kind == "directive" else 280
+    text = _redacted_detail(value, limit)
     if not text:
+        return None
+    compact = re.sub(r"\s+", "", text)
+    if re.fullmatch(r"gAAAAA[A-Za-z0-9_-]{32,}", compact):
+        return None
+    if len(compact) >= 48 and re.fullmatch(r"[A-Za-z0-9+/=_-]+", compact):
+        return None
+    if re.fullmatch(r"(?:[A-Fa-f0-9]{24,}|[A-Fa-f0-9-]{32,})", compact):
         return None
     if re.search(r"Referenced ChatGPT conversation|untrusted ChatGPT conversation reference", text, re.I):
         return "이전 대화에서 이어진 작업 지시"
@@ -160,7 +177,7 @@ def _korean_safe_detail(value: Any, kind: str) -> str | None:
     def replace_english(match: re.Match[str]) -> str:
         chunk = match.group(0).strip()
         allowed = ALLOWED_TERMS.get(chunk.lower())
-        return allowed if allowed else (_topic_summary(chunk, kind) or "기술 내용")
+        return allowed if allowed else (_topic_summary(chunk, kind) or "영문 용어")
 
     text = re.sub(
         r"[A-Za-z][A-Za-z0-9_./:=\\-]*(?:[ \t]+[A-Za-z][A-Za-z0-9_./:=\\-]*)*",
@@ -168,10 +185,12 @@ def _korean_safe_detail(value: Any, kind: str) -> str | None:
         text,
     )
     text = " ".join(text.split()).strip(" -:;,")
+    text = text.replace("현재 사용자 지시사항 지시", "현재 CEO 지시")
     text = re.sub(r"(?:사용자 지시사항[\s,;:'\"#-]*){2,}", "사용자 지시사항", text)
+    text = re.sub(r"(?:영문 용어[\s,;:'\"#·-]*){2,}", "영문 용어", text)
     if not text or not re.search(r"[가-힣]", text):
-        return _topic_summary(str(value), kind)
-    return text[:280]
+        return _topic_summary(str(value), kind) or ("영문으로 작성된 작업 지시" if kind == "directive" else None)
+    return text[:limit]
 
 
 def _user_request(value: Any) -> str | None:

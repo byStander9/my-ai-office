@@ -448,6 +448,42 @@ test("converts mixed Korean and English commands into a Korean-safe display summ
   }
 });
 
+test("preserves CEO wording without injecting repeated placeholder text", () => {
+  const detail = "업무 활동 요약이랑 현재 CEO 지시에 '사용자 지시사항'이라는 표현이 반복돼.";
+  const clean = sanitizeEvent(event({ detailKind: "directive", detail, detailCapture: true }));
+  assert.equal(clean.detail, detail);
+  assert.equal(clean.detail.match(/사용자 지시사항/g)?.length, 1);
+});
+
+test("uses safe Korean labels for unknown English terms without directive placeholders", () => {
+  const detail = "Preble E2 cached_len 결과를 DOCX에 정리해줘.";
+  const clean = sanitizeEvent(event({ detailKind: "directive", detail, detailCapture: true }));
+  assert.equal(clean.detail.includes("사용자 지시사항"), false);
+  assert.match(clean.detail, /영문 용어/);
+  assert.match(clean.detail, /워드 문서/);
+});
+
+test("redacts Korean UNC and POSIX paths from detailed directives", () => {
+  const detail = "한글 UNC \\\\서버이름\\공유폴더\\비밀문서.txt와 POSIX /비밀경로/문서.txt를 확인해줘.";
+  const clean = sanitizeEvent(event({ detailKind: "directive", detail, detailCapture: true }));
+  assert.equal(clean.detail.includes("서버이름"), false);
+  assert.equal(clean.detail.includes("비밀경로"), false);
+  assert.equal(clean.detail.match(/\[경로\]/g)?.length, 2);
+});
+
+test("keeps long directive text available for scrollable detail views and activity summaries", () => {
+  const firstSentence = "길이가 긴 CEO 지시의 세부 요구사항을 프로젝트 상세 화면과 업무 활동 요약에서 빠짐없이 확인할 수 있도록 전체 내용을 유지해줘";
+  const detail = `${firstSentence}. ${"세부 요구사항을 빠짐없이 표시합니다. ".repeat(30)}`;
+  const snapshot = reduceEvents([
+    event({ id: "long-directive", type: "directive.submitted", detailKind: "directive", detail, detailCapture: true, appendSeq: 1 }),
+    event({ id: "long-work", type: "employee.tool.started", tool: "apply_patch", appendSeq: 2 }),
+  ], { now: new Date("2026-08-26T06:00:01.000Z") });
+  assert.ok(snapshot.projects[0].currentDirective.summary.length > 280);
+  assert.ok(snapshot.projects[0].currentDirective.title.length > 64);
+  assert.equal(snapshot.events.find((item) => item.type === "directive.submitted")?.detail, detail.trim());
+  assert.match(snapshot.events.find((item) => item.type === "activity.summary")?.instructionTitle ?? "", /길이가 긴 CEO 지시/);
+});
+
 test("normalizes legacy markup and referenced-chat placeholders into readable Korean", () => {
   const markedUp = sanitizeEvent(event({
     detailKind: "directive",
