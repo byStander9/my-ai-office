@@ -215,7 +215,7 @@ def _event_from(raw: dict[str, Any], base_dir: Path) -> dict[str, Any]:
 
 def main() -> int:
     try:
-        raw = json.load(sys.stdin)
+        raw = json.loads(sys.stdin.buffer.read().decode("utf-8"))
         if not isinstance(raw, dict):
             return 0
 
