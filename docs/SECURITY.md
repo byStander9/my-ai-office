@@ -22,12 +22,12 @@
 
 Detailed activity is disabled by default. When `captureDetails` is explicitly enabled in the local settings file, the sink may additionally persist:
 
-- A short, redacted `UserPromptSubmit.prompt` as a user directive
+- A redacted `UserPromptSubmit.prompt` as a user directive, capped at 4,000 characters
 - A short, redacted `tool_input.message` from the allowlisted subagent collaboration tools only
 - Redacted assignment role/name metadata from an allowlisted subagent spawn request
 - A short, redacted Korean-safe summary derived from `SubagentStop.last_assistant_message` as the employee's final handoff
 
-The sink still never stores shell or patch input, arbitrary tool input or output, `tool_response`, main-agent final messages, or transcript paths/content. It removes common token patterns, authorization values, email addresses, absolute paths, English command fragments, and opaque strings before persistence; the Node API repeats that filtering. Known work topics become deterministic Korean presentation summaries. Redaction is best effort and cannot prove that every sensitive value was removed.
+The sink still never stores shell or patch input, arbitrary tool input or output, `tool_response`, main-agent final messages, or transcript paths/content. It removes common token patterns, authorization values, email addresses, absolute paths, English command fragments, and opaque strings before persistence; the Node API repeats that filtering. Known work topics become deterministic Korean presentation summaries, while unknown English chunks use a neutral Korean label rather than a directive placeholder. Redaction is best effort and cannot prove that every sensitive value was removed.
 
 The UI shows a local-detail badge while recent events confirm that capture is enabled. Discussion text is returned inside a project only while at least two subagents are actively collaborating. Anyone who can reach the local service, including an allowed Tailscale peer, can read displayed details.
 

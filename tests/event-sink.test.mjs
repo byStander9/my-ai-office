@@ -94,3 +94,70 @@ test("event sink captures only redacted opt-in directive and collaboration detai
   }
   assert.equal(serialized.includes("gAAAAA"), false);
 });
+
+test("event sink preserves CEO wording and long Korean directives", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "ai-office-long-directive-"));
+  const eventsPath = join(root, "events.jsonl");
+  context.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, "settings.json"), JSON.stringify({ captureDetails: true }), "utf8");
+
+  const executable = process.platform === "win32" ? "py" : "python3";
+  const args = process.platform === "win32" ? ["-3", resolve("codex/event_sink.py")] : [resolve("codex/event_sink.py")];
+  const detail = `현재 CEO 지시를 그대로 표시해줘. ${"긴 세부 내용을 스크롤로 확인합니다. ".repeat(30)}`;
+  const result = spawnSync(executable, args, {
+    cwd: resolve("."),
+    env: { ...process.env, AI_OFFICE_EVENTS_PATH: eventsPath },
+    input: JSON.stringify({ hook_event_name: "UserPromptSubmit", cwd: "C:\\workspace\\Project", session_id: "session", prompt: detail }),
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+
+  const saved = JSON.parse((await readFile(eventsPath, "utf8")).trim());
+  assert.ok(saved.detail.length > 280);
+  assert.match(saved.detail, /현재 CEO 지시/);
+  assert.equal(saved.detail.includes("현재 사용자 지시사항 지시"), false);
+});
+
+test("event sink does not turn unknown English terms into directive placeholders", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "ai-office-english-directive-"));
+  const eventsPath = join(root, "events.jsonl");
+  context.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, "settings.json"), JSON.stringify({ captureDetails: true }), "utf8");
+
+  const executable = process.platform === "win32" ? "py" : "python3";
+  const args = process.platform === "win32" ? ["-3", resolve("codex/event_sink.py")] : [resolve("codex/event_sink.py")];
+  const result = spawnSync(executable, args, {
+    cwd: resolve("."),
+    env: { ...process.env, AI_OFFICE_EVENTS_PATH: eventsPath },
+    input: JSON.stringify({ hook_event_name: "UserPromptSubmit", cwd: "C:\\workspace\\Project", session_id: "session", prompt: "Preble E2 cached_len 결과를 DOCX에 정리해줘." }),
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+
+  const saved = JSON.parse((await readFile(eventsPath, "utf8")).trim());
+  assert.equal(saved.detail.includes("사용자 지시사항"), false);
+  assert.match(saved.detail, /영문 용어/);
+  assert.match(saved.detail, /워드 문서/);
+});
+
+test("event sink redacts Korean UNC and POSIX paths", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "ai-office-korean-paths-"));
+  const eventsPath = join(root, "events.jsonl");
+  context.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, "settings.json"), JSON.stringify({ captureDetails: true }), "utf8");
+
+  const executable = process.platform === "win32" ? "py" : "python3";
+  const args = process.platform === "win32" ? ["-3", resolve("codex/event_sink.py")] : [resolve("codex/event_sink.py")];
+  const result = spawnSync(executable, args, {
+    cwd: resolve("."),
+    env: { ...process.env, AI_OFFICE_EVENTS_PATH: eventsPath },
+    input: JSON.stringify({ hook_event_name: "UserPromptSubmit", cwd: "C:\\workspace\\Project", session_id: "session", prompt: "한글 UNC \\\\서버이름\\공유폴더\\비밀문서.txt와 POSIX /비밀경로/문서.txt를 확인해줘." }),
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+
+  const saved = JSON.parse((await readFile(eventsPath, "utf8")).trim());
+  assert.equal(saved.detail.includes("서버이름"), false);
+  assert.equal(saved.detail.includes("비밀경로"), false);
+  assert.equal(saved.detail.match(/\[경로\]/g)?.length, 2);
+});

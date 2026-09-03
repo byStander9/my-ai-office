@@ -51,8 +51,8 @@ function safeTimestamp(value) {
   return Number.isFinite(time) ? new Date(time).toISOString() : null;
 }
 
-function safeDetail(value) {
-  const text = safeText(value, 280);
+function safeDetail(value, maxLength = 280) {
+  const text = safeText(value, maxLength);
   if (!text) return null;
   return text
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, " ")
@@ -63,8 +63,9 @@ function safeDetail(value) {
     .replace(/\bBearer\s+[^\s,;]+/gi, "Bearer [secret]")
     .replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^/\s:@]+:[^@\s/]+@/gi, "$1[credentials]@")
     .replace(/\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b/g, "[email]")
+    .replace(/\\\\[^\s\\,;]+(?:\\[^\s,;]+)+/g, "[path]")
     .replace(/\b[A-Za-z]:\\[^\r\n,;]+/g, "[path]")
-    .replace(/(^|[^\w:])\/(?:[A-Za-z0-9._~-]+(?:\/[^\s,;]+)*)/g, "$1[path]")
+    .replace(/(^|[^\w:/])\/(?:[^\s/,;]+(?:\/[^\s,;]+)*)/g, "$1[path]")
     .replace(/\b(password|passwd|token|api[\s_-]*key|secret)\s*[:=]\s*[^\s,;]+/gi, "$1=[secret]");
 }
 
@@ -100,11 +101,12 @@ function topicSummary(value, kind) {
     if (kind === "handoff") return `${subject}에 관한 담당 결과를 인계했습니다.`;
     return `${subject}에 관한 지시사항`;
   }
-  return kind === "directive" ? "사용자 지시사항" : null;
+  return null;
 }
 
 function koreanDetail(value, kind) {
-  let text = safeDetail(value);
+  const limit = kind === "directive" ? 4_000 : 280;
+  let text = safeDetail(value, limit);
   if (!text) return null;
   text = text
     .replace(/<in-app-browser-context\b[^>]*>.*?<\/in-app-browser-context>/gis, " ")
@@ -127,12 +129,20 @@ function koreanDetail(value, kind) {
   if (!text || isOpaqueDetail(text)) return null;
   text = text.replace(/```.*?```|`[^`]*`/gis, " 기술 명령 ");
   text = text.replace(/[A-Za-z][A-Za-z0-9_./:=\\-]*(?:[ \t]+[A-Za-z][A-Za-z0-9_./:=\\-]*)*/g, (chunk) => {
-    const allowed = { api: "API", ci: "CI", github: "GitHub", node: "Node", npu: "NPU", readme: "README" }[chunk.trim().toLowerCase()];
-    return allowed ?? topicSummary(chunk, kind) ?? "기술 내용";
+    const allowed = {
+      api: "API", ceo: "CEO", ci: "CI", codex: "Codex", docx: "워드 문서", github: "GitHub",
+      json: "JSON", md: "마크다운 문서", node: "Node", npu: "NPU", pdf: "PDF",
+      pptx: "파워포인트 파일", readme: "README", yaml: "YAML",
+    }[chunk.trim().toLowerCase()];
+    return allowed ?? topicSummary(chunk, kind) ?? "영문 용어";
   });
   text = text.replace(/\s+/g, " ").replace(/^[-:;,\s]+|[-:;,\s]+$/g, "").trim();
+  text = text.replace(/현재 사용자 지시사항 지시/g, "현재 CEO 지시");
   text = text.replace(/(?:사용자 지시사항[\s,;:'"#-]*){2,}/g, "사용자 지시사항");
-  return /[가-힣]/.test(text) ? text.slice(0, 280) : topicSummary(String(value ?? ""), kind);
+  text = text.replace(/(?:영문 용어[\s,;:'"#·-]*){2,}/g, "영문 용어");
+  return /[가-힣]/.test(text)
+    ? text.slice(0, limit)
+    : topicSummary(String(value ?? ""), kind) ?? (kind === "directive" ? "영문으로 작성된 작업 지시" : null);
 }
 
 function koreanLabel(value, fallback) {
@@ -281,8 +291,7 @@ function assignmentMessage(event, instructionTitle) {
 function directiveTitle(detail) {
   if (!detail) return "현재 지시사항";
   const cleaned = detail.replace(/^[#>*\s-]+/, "").replace(/\s+/g, " ").trim();
-  const firstSentence = cleaned.split(/(?<=[.!?。])\s+|\n/)[0] || cleaned;
-  return firstSentence.length > 64 ? `${firstSentence.slice(0, 63)}…` : firstSentence;
+  return cleaned.split(/(?<=[.!?。])\s+|\n/)[0] || cleaned;
 }
 
 function projectDisplayName(name) {

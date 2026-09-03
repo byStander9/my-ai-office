@@ -32,7 +32,8 @@ flowchart LR
 - Projects are hidden after 24 hours without activity and automatically return on later work.
 - The activity panel owns a project filter separate from the office-map filter.
 - Optional details are captured only from redacted user directives, allowlisted assignment/collaboration fields, and short subagent handoff summaries. The reducer links them into a Korean `CEO directive → assignment → work stage → collaboration → validation/handoff` presentation model.
-- Opaque encrypted strings and untranslated English prose are replaced by Korean safe summaries; raw tool names and source identifiers never become browser-facing descriptions. Project discussion is returned only when at least two subagents collaborate.
+- Detailed directives retain up to 4,000 redacted characters. Overview cards stay compact, while a focused project exposes the full directive in a keyboard-scrollable region; the activity panel scrolls through all 80 returned activities.
+- Opaque encrypted strings and untranslated English prose are replaced by Korean safe summaries. Unknown English chunks never reuse the `사용자 지시사항` directive placeholder; raw tool names and source identifiers never become browser-facing descriptions. Project discussion is returned only when at least two subagents collaborate.
 - `turn.stopping` becomes idle after a two-second quiet interval.
 - A snapshot becomes stale after five minutes without a new event.
 - The API returns at most the 80 most recent activities and reads at most 50,000 source events.

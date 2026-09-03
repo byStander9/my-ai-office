@@ -101,14 +101,18 @@ function Agent({ agent, projectColor }) {
 function ProjectRoom({ project, selected, onSelect }) {
   const meetingAgents = project.agents.filter((agent) => agent.state === "meeting");
   const deskAgents = project.agents.filter((agent) => agent.state !== "meeting");
-  return <button className={`project-room ${selected ? "project-room--selected" : ""}`} onClick={() => onSelect(project.id)} type="button" aria-label={`${project.name} 프로젝트 보기`} style={{ "--room-color": project.color }}>
+  const directiveText = selected ? project.currentDirective?.summary ?? project.currentDirective?.title : project.currentDirective?.title;
+  const directiveLabel = <><b>현재 CEO 지시</b><span>{directiveText}</span></>;
+  return <article className={`project-room ${selected ? "project-room--selected" : ""}`} style={{ "--room-color": project.color }}>
     <span className="project-room__door" aria-hidden="true" />
-    <span className="project-room__header"><span><strong>{project.name}</strong><small>{project.health}</small></span><span className="project-room__count"><UsersThree size={16} /> {project.agents.length}</span></span>
-    {project.currentDirective && <span className="project-room__directive"><b>현재 CEO 지시</b><span>{project.currentDirective.title}</span></span>}
+    <button className="project-room__select" onClick={() => onSelect(project.id)} type="button" aria-label={`${project.name} 프로젝트만 보기`}><span className="project-room__header"><span><strong>{project.name}</strong><small>{project.health}</small></span><span className="project-room__count"><UsersThree size={16} /> {project.agents.length}</span></span></button>
+    {project.currentDirective && (selected
+      ? <div className="project-room__directive project-room__directive--scroll" role="region" aria-label={`${project.name} 현재 CEO 지시 전체 내용`} tabIndex={0}>{directiveLabel}</div>
+      : <button className="project-room__directive" onClick={() => onSelect(project.id)} type="button" aria-label={`${project.name} 현재 CEO 지시 전체 내용 보기`}>{directiveLabel}</button>)}
     {project.assignments?.length > 0 && <span className="project-room__assignments"><b>직원별 배정 업무</b>{project.assignments.slice(0, 3).map((assignment) => <span key={assignment.id}><strong>{assignment.employeeName}</strong>{assignment.task}</span>)}</span>}
     <span className="project-room__agents">{deskAgents.map((agent) => <Agent key={agent.id} agent={agent} projectColor={project.color} />)}</span>
     {meetingAgents.length > 0 && <span className="meeting-table"><span className="meeting-table__label"><Handshake size={15} weight="duotone" /> 협업 테이블</span><span className="meeting-table__people">{meetingAgents.map((agent) => <Agent key={agent.id} agent={agent} projectColor={project.color} />)}</span>{project.discussions?.length > 0 && <span className="meeting-table__discussion"><strong>최근 논의</strong>{project.discussions.slice(0, 3).map((discussion) => <span key={discussion.id}><b>{discussion.employeeName}</b>{discussion.message}</span>)}</span>}</span>}
-  </button>;
+  </article>;
 }
 
 export function App() {
@@ -157,7 +161,7 @@ export function App() {
   }, [activityProject, projects, selectedProject]);
 
   const visibleProjects = selectedProject === "all" ? projects : projects.filter((project) => project.id === selectedProject);
-  const visibleEvents = useMemo(() => events.filter((event) => activityProject === "all" || event.projectId === activityProject).slice(0, 10), [activityProject, events]);
+  const visibleEvents = useMemo(() => events.filter((event) => activityProject === "all" || event.projectId === activityProject), [activityProject, events]);
   const activeAgents = visibleProjects.flatMap((project) => project.agents).filter((agent) => ["working", "meeting", "review"].includes(agent.state)).length;
   const connectionLabel = source === "live" && freshness === "stale" ? "연결됨 · 상태 오래됨" : source === "live" ? "실시간 연결" : source === "demo" ? "예시 데이터" : source === "error" ? "서버 연결 끊김" : "연결 확인 중";
   const connectionClass = source === "live" && freshness === "stale" ? "stale" : source;
@@ -176,7 +180,7 @@ export function App() {
     <section className="dashboard-grid">
       <section className="office-panel" aria-labelledby="office-title">
         <div className="section-heading"><div><span className="eyebrow">실시간 업무 공간</span><h1 id="office-title">AI 직원 업무 현황</h1></div><div className="summary-pills"><span><strong>{visibleProjects.length}</strong> 프로젝트</span><span><strong>{activeAgents}</strong> 활동 중</span></div></div>
-        {projects.length ? <div className={`office-map ${visibleProjects.length === 1 ? "office-map--single" : ""}`}>
+        {projects.length ? <div className={`office-map ${visibleProjects.length === 1 ? "office-map--single" : ""} ${selectedProject !== "all" ? "office-map--focused" : ""}`}>
           <div className="corridor-label"><Buildings size={15} /> 중앙 복도</div>
           <div className="rooms-grid">{visibleProjects.map((project) => <ProjectRoom key={project.id} project={project} selected={selectedProject === project.id} onSelect={setSelectedProject} />)}</div>
           <div className="office-map__legend"><span><i className="status-dot status-dot--working" />작업 중</span><span><i className="status-dot status-dot--meeting" />협업 중</span><span><i className="status-dot status-dot--waiting" />대기</span></div>
@@ -187,7 +191,7 @@ export function App() {
         <div className="activity-panel__heading"><div><span className="eyebrow">지시 기반 업무 흐름</span><h2 id="activity-title">업무 활동 요약</h2></div><span className="activity-count">{visibleEvents.length}</span></div>
         <label className="activity-filter">프로젝트별 보기<select aria-label="활동 프로젝트" value={activityProject} onChange={(event) => setActivityProject(event.target.value)}><option value="all">전체 프로젝트</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
         {detailCaptureEnabled && <span className="detail-capture-badge">로컬 상세 기록 켜짐</span>}
-        <div className="timeline" aria-live="polite">{visibleEvents.length ? visibleEvents.map((event) => {
+        <div className="timeline" aria-live="polite" aria-label="업무 활동 요약 전체 목록" role="region" tabIndex={0}>{visibleEvents.length ? visibleEvents.map((event) => {
           const project = projects.find((item) => item.id === event.projectId) ?? projects[0];
           const Icon = event.type === "employee.approval.waiting" || ["visual_check", "validation"].includes(event.activityCategory) ? ShieldCheck : event.activityCategory === "code_change" ? Code : event.activityCategory === "research" ? MagnifyingGlass : event.activityCategory === "coordination" || ["employee.completed", "employee.work.completed"].includes(event.type) ? Handshake : ["planning", "document_work", "environment_setup", "automation"].includes(event.activityCategory) || event.type === "directive.submitted" ? CheckCircle : Clock;
           const duration = activityDuration(event);

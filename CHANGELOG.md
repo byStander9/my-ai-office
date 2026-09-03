@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## 0.1.9 — 2026-09-03
+
+- Stopped unknown English terms from being repeated as `사용자 지시사항` in CEO directives and activity summaries.
+- Preserved detailed directives up to 4,000 characters after local redaction instead of truncating them to 280 characters.
+- Added scrolling for the complete activity timeline and for the full CEO directive in a focused project view.
+- Kept overview project cards compact while separating project selection from the directive detail control for keyboard access.
+
 ## 0.1.8 — 2026-09-03
 
 - Improved Korean assignment sentence grammar.
