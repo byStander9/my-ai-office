@@ -221,8 +221,24 @@ function assignmentIdentity(role) {
 
 function assignmentIdentityForEvent(event) {
   const explicit = assignmentIdentity(event.assignmentRole);
-  if (event.assignmentEmployeeName || event.assignmentRole in ROLE_ASSIGNMENTS) {
-    return [event.assignmentEmployeeName ?? explicit[0], explicit[1]];
+  if (event.assignmentEmployeeName) {
+    const roleByName = {
+      "코드 탐색 담당": "코드베이스 탐색",
+      "구현 담당": "배정 기능 구현",
+      "구현 엔지니어": "기능 구현",
+      "품질 검증 담당": "테스트·수용 기준 검증",
+      "코드 리뷰 담당": "회귀·보안·유지보수 검토",
+      "리서치 담당": "자료·근거 조사",
+      "기획 담당": "요구사항·작업 분해",
+      "대안 검토 담당": "리스크·대안 검토",
+      "화면 검증 담당": "화면 동작 검증",
+      "보안 검토 담당": "개인정보 보호·보안 검토",
+      "문서 정리 담당": "문서 작성·정리",
+    };
+    return [event.assignmentEmployeeName, roleByName[event.assignmentEmployeeName] ?? "CEO 지시사항 세부 작업"];
+  }
+  if (event.assignmentRole in ROLE_ASSIGNMENTS) {
+    return explicit;
   }
   const detail = `${event.assignmentTask ?? ""} ${event.detail ?? ""}`;
   if (/검증|테스트|품질/.test(detail)) return ["품질 검증 담당", "테스트·수용 기준 검증"];
@@ -254,6 +270,12 @@ function assignmentTitle(event, currentDirective = null) {
 
 function assignmentName(event) {
   return assignmentIdentityForEvent(event)[0];
+}
+
+function assignmentMessage(event, instructionTitle) {
+  const task = assignmentTitle(event, { title: instructionTitle });
+  const object = /업무$/.test(task) ? `'${task}'를` : `'${task}' 업무를`;
+  return `${assignmentName(event)}에게 ${object} 배정했습니다.`;
 }
 
 function directiveTitle(detail) {
@@ -350,7 +372,7 @@ function activityMessage(event, employee, instructionTitle = "현재 지시사�
     case "session.ended": return `${employee.name}의 세션이 종료되었습니다.`;
     case "directive.submitted": return `CEO가 '${instructionTitle}' 지시를 전달했습니다.`;
     case "employee.tool.started": return event.detailKind === "assignment"
-      ? `${assignmentName(event)}에게 '${assignmentTitle(event, { title: instructionTitle })}'를 배정했습니다.`
+      ? assignmentMessage(event, instructionTitle)
       : `${employee.name}이(가) '${instructionTitle}' 지시에 따른 세부 작업을 진행하고 있습니다.`;
     case "employee.spawned":
     case "employee.started": return `${employee.name}이(가) '${instructionTitle}' 지시의 담당 업무에 합류했습니다.`;
