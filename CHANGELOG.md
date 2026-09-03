@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## 0.1.6 — 2026-09-03
+
+- Hid lifecycle-only chat sessions and projects without activity for 24 hours.
+- Added an independent per-project activity selector with optional concrete work details.
+- Added local opt-in capture for redacted directives and subagent collaboration messages.
+- Displayed recent discussion text only when at least two subagents are actively collaborating.
+
 ## 0.1.2 — 2026-08-27
 
 - Kept project rooms in stable positions during ordinary activity updates.

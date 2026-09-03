@@ -1,6 +1,6 @@
 {
   "name": "ai-office-dashboard",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "description": "A privacy-conscious, real-time office dashboard for Codex projects and AI workers.",
   "license": "MIT",
