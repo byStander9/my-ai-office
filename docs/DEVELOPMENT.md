@@ -48,6 +48,10 @@ Employee labels are derived from allowlisted role and tool categories, so framew
 
 The activity panel keeps directives, assignments, handoffs, approvals, compaction, and session transitions as distinct events. Repeated tool start/finish events are grouped by employee and safe activity category until a 10-minute inactivity gap. Each card shows a category such as code change, visual verification, research, coordination, validation, or command/status checking, plus its duration and number of detailed steps. Prompts, commands, file paths, tool inputs, and tool outputs are not used for these descriptions.
 
+Lifecycle-only sessions are now treated as simple chats and omitted until a tool, subagent, or approval event proves Codex work. A project leaves the office after 24 hours without activity and returns automatically with its next work event. The right panel has its own project selector so reviewing one project's history does not rearrange or narrow the office map.
+
+Concrete text remains a local opt-in. When enabled, the sink stores only short, redacted user directives and the `message` field of allowlisted collaboration tools. The API repeats the redaction, and meeting discussions appear only while at least two subagents collaborate. Shell/patch input, general tool I/O, transcripts, and subagent final messages remain excluded.
+
 **Result:** the office shows active collaboration, approval waits, quiet transitions, disconnected state, and stale state separately.
 
 ![Sanitized live-mode dashboard](screenshots/dashboard-live-sanitized.png)
@@ -85,7 +89,7 @@ npm run build
 
 Expected results:
 
-- 34/34 Node tests pass.
+- 38/38 Node tests pass.
 - Vite production build succeeds.
 - `dist/client/index.html`, `dist/server/index.js`, and `dist/.openai/hosting.json` are generated.
 - The local server listens only on `127.0.0.1`.
@@ -99,3 +103,4 @@ Expected results:
 - Hook trust must be reviewed in Codex by the user.
 - The packaged automatic installer targets Windows. Foreground Node operation is portable, but background startup scripts are not yet provided for macOS or Linux.
 - Static hosting is a showcase, not a live remote dashboard.
+- Hooks currently expose no reliable ChatGPT-versus-Codex product-source field. The dashboard therefore uses evidence of actual tool/subagent/approval work; a genuine text-only Codex task is intentionally hidden with other simple chats.

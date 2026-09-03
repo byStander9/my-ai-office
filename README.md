@@ -13,9 +13,12 @@ Sanitized live mode, captured from the real local API with synthetic public even
 ## What you can see
 
 - All active Codex projects in one office map
+- Lifecycle-only chat sessions stay hidden; a project appears only after tool, subagent, or approval work begins
+- Projects leave the office after 24 hours without activity and return automatically on later work
 - Main agents and functional subagents grouped by project
 - Working, collaborating, waiting-for-approval, idle, and stale states
 - A long-term work-summary timeline refreshed every 1.5 seconds
+- An independent project selector for the activity panel
 - Automatic meeting-table grouping when two or more employees work on one project
 - Functional employee names derived from safe role/tool metadata instead of framework labels such as `default`
 - Completed employees leave project rooms after a 15-second handoff period while their completion remains in recent activity
@@ -23,6 +26,7 @@ Sanitized live mode, captured from the real local API with synthetic public even
 - Repeated tool start/finish events become one functional activity card per employee and category over a 10-minute work stream
 - Stable project-room positions during ordinary activity; rooms move only for project lifecycle changes
 - A clear demo state when no local event file exists
+- Optional local-only directive and collaboration details, redacted before storage and shown at the meeting table only when two or more subagents collaborate
 
 ## Quick start on Windows
 
@@ -40,6 +44,14 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
 ```
 
 The installer performs a clean dependency install, runs all tests, builds the app, installs the privacy-minimized event sink, merges the AI Office hooks into the existing Codex user hook file, and adds a current-user Windows Startup shortcut. Existing hook configuration is backed up before modification.
+
+Detailed directive and collaboration text is off by default. To enable the local opt-in while installing, add `-EnableDetailedActivity`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -EnableDetailedActivity
+```
+
+Disable future detailed capture with `-DisableDetailedActivity`. Reinstalling without either switch preserves the existing choice. Previously stored details remain in the rotating local event file until rotation or explicit data removal. For temporary runs, `AI_OFFICE_CAPTURE_DETAILS=1` also enables capture for that hook process.
 
 Then open Codex, run `/hooks`, review the user hooks, and trust them. Hook changes may require another review. The dashboard is available at [http://127.0.0.1:4175/](http://127.0.0.1:4175/); it starts without a terminal window on future sign-ins.
 
@@ -88,7 +100,9 @@ Static hosting can display only the demo UI; it cannot read the private event fi
 
 ## Privacy model
 
-The event sink uses a strict allowlist. It does not persist prompts, commands, tool input/output, file contents, credentials, full working-directory paths, or raw session/turn/worker/tool-use identifiers. The browser API applies a second allowlist and returns only display names, opaque IDs, roles, states, tool names, and timestamps.
+The event sink uses a strict allowlist. By default it does not persist prompts, commands, tool input/output, file contents, credentials, full working-directory paths, or raw session/turn/worker/tool-use identifiers. When local detailed activity is explicitly enabled, it additionally stores only short, redacted user directives and the `message` field of allowlisted subagent collaboration tools. It never stores shell or patch inputs, arbitrary tool responses, transcripts, or subagent final messages. The browser API applies a second allowlist and redaction pass.
+
+Redaction is best effort, not a guarantee. Keep the service on localhost, and remember that any permitted Tailscale viewer can read enabled details. The capture fields are based on the [official OpenAI Codex Hooks documentation](https://learn.chatgpt.com/docs/hooks).
 
 Project folder names and agent role names are intentionally visible in the dashboard. Treat them as user-controlled display metadata. See [Security and privacy](docs/SECURITY.md) for the full boundary.
 
@@ -99,7 +113,7 @@ npm test
 npm run build
 ```
 
-The current suite contains 34 tests covering event-sink privacy, repeatable hook merging, event sanitization, opaque identifiers, long-term activity summaries, employee retirement, orphan cleanup and functional naming, stable project ordering, project completion and resumption, stale-state boundaries, collaboration inference, localhost-only serving, rotated event files, and static hosting output. The complete staged build record and results are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+The current suite contains 38 tests covering event-sink privacy and opt-in redaction, chat/project filtering, inactive project cleanup, repeatable hook merging, event sanitization, opaque identifiers, long-term activity summaries, employee retirement, orphan cleanup and functional naming, stable project ordering, project completion and resumption, stale-state boundaries, collaboration discussions, localhost-only serving, rotated event files, and static hosting output. The complete staged build record and results are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Repository map
 

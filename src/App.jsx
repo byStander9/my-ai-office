@@ -13,6 +13,9 @@ const demoProjects = [
     { id: "demo-perf", name: "성능 분석가", role: "벤치마크 분석", status: "working", kind: "main" },
     { id: "demo-research", name: "리서처", role: "근거 교차검증", status: "meeting", kind: "subagent" },
     { id: "demo-backend", name: "백엔드 담당", role: "API 로그 확인", status: "meeting", kind: "subagent" },
+  ], discussions: [
+    { id: "demo-talk-1", employeeName: "리서처", message: "벤치마크 조건과 비교 기준을 먼저 맞추겠습니다." },
+    { id: "demo-talk-2", employeeName: "백엔드 담당", message: "동일 조건의 API 로그를 기준으로 확인하겠습니다." },
   ]},
 ];
 const demoEvents = [
@@ -97,12 +100,13 @@ function ProjectRoom({ project, selected, onSelect }) {
     <span className="project-room__door" aria-hidden="true" />
     <span className="project-room__header"><span><strong>{project.name}</strong><small>{project.health}</small></span><span className="project-room__count"><UsersThree size={16} /> {project.agents.length}</span></span>
     <span className="project-room__agents">{deskAgents.map((agent) => <Agent key={agent.id} agent={agent} projectColor={project.color} />)}</span>
-    {meetingAgents.length > 0 && <span className="meeting-table"><span className="meeting-table__label"><Handshake size={15} weight="duotone" /> 협업 테이블</span><span className="meeting-table__people">{meetingAgents.map((agent) => <Agent key={agent.id} agent={agent} projectColor={project.color} />)}</span></span>}
+    {meetingAgents.length > 0 && <span className="meeting-table"><span className="meeting-table__label"><Handshake size={15} weight="duotone" /> 협업 테이블</span><span className="meeting-table__people">{meetingAgents.map((agent) => <Agent key={agent.id} agent={agent} projectColor={project.color} />)}</span>{project.discussions?.length > 0 && <span className="meeting-table__discussion"><strong>최근 논의</strong>{project.discussions.slice(0, 3).map((discussion) => <span key={discussion.id}><b>{discussion.employeeName}</b>{discussion.message}</span>)}</span>}</span>}
   </button>;
 }
 
 export function App() {
   const [selectedProject, setSelectedProject] = useState("all");
+  const [activityProject, setActivityProject] = useState("all");
   const [projects, setProjects] = useState([]);
   const [events, setEvents] = useState([]);
   const [source, setSource] = useState("connecting");
@@ -110,6 +114,7 @@ export function App() {
   const [lastEventAt, setLastEventAt] = useState(null);
   const [lastSync, setLastSync] = useState(null);
   const [now, setNow] = useState(Date.now());
+  const [detailCaptureEnabled, setDetailCaptureEnabled] = useState(false);
 
   useEffect(() => {
     const clock = window.setInterval(() => setNow(Date.now()), 1_000);
@@ -128,6 +133,7 @@ export function App() {
         setSource(isDemo ? "demo" : "live");
         setFreshness(payload.freshness);
         setLastEventAt(payload.lastEventAt ?? null);
+        setDetailCaptureEnabled(payload.detailCaptureEnabled === true);
         setLastSync(Date.now());
       } catch {
         if (!cancelled) setSource("error");
@@ -140,10 +146,11 @@ export function App() {
 
   useEffect(() => {
     if (selectedProject !== "all" && !projects.some((project) => project.id === selectedProject)) setSelectedProject("all");
-  }, [projects, selectedProject]);
+    if (activityProject !== "all" && !projects.some((project) => project.id === activityProject)) setActivityProject("all");
+  }, [activityProject, projects, selectedProject]);
 
   const visibleProjects = selectedProject === "all" ? projects : projects.filter((project) => project.id === selectedProject);
-  const visibleEvents = useMemo(() => events.filter((event) => selectedProject === "all" || event.projectId === selectedProject).slice(0, 10), [events, selectedProject]);
+  const visibleEvents = useMemo(() => events.filter((event) => activityProject === "all" || event.projectId === activityProject).slice(0, 10), [activityProject, events]);
   const activeAgents = visibleProjects.flatMap((project) => project.agents).filter((agent) => ["working", "meeting", "review"].includes(agent.state)).length;
   const connectionLabel = source === "live" && freshness === "stale" ? "연결됨 · 상태 오래됨" : source === "live" ? "실시간 연결" : source === "demo" ? "DEMO 데이터" : source === "error" ? "서버 연결 끊김" : "연결 확인 중";
   const connectionClass = source === "live" && freshness === "stale" ? "stale" : source;
@@ -166,18 +173,20 @@ export function App() {
           <div className="corridor-label"><Buildings size={15} /> 중앙 복도</div>
           <div className="rooms-grid">{visibleProjects.map((project) => <ProjectRoom key={project.id} project={project} selected={selectedProject === project.id} onSelect={setSelectedProject} />)}</div>
           <div className="office-map__legend"><span><i className="status-dot status-dot--working" />작업 중</span><span><i className="status-dot status-dot--meeting" />협업 중</span><span><i className="status-dot status-dot--waiting" />대기</span></div>
-        </div> : <div className="empty-state"><WarningCircle size={32} weight="duotone" /><strong>이벤트 서버에 연결할 수 없습니다</strong><span>로컬 AI Office 서버가 실행 중인지 확인하세요.</span></div>}
+        </div> : <div className="empty-state"><WarningCircle size={32} weight="duotone" /><strong>{source === "error" ? "이벤트 서버에 연결할 수 없습니다" : "표시할 최근 Codex 프로젝트가 없습니다"}</strong><span>{source === "error" ? "로컬 AI Office 서버가 실행 중인지 확인하세요." : "도구 또는 서브에이전트 작업이 시작되면 프로젝트가 나타납니다."}</span></div>}
       </section>
 
       <aside className="activity-panel" aria-labelledby="activity-title">
         <div className="activity-panel__heading"><div><span className="eyebrow">WORK SUMMARY</span><h2 id="activity-title">업무 활동 요약</h2></div><span className="activity-count">{visibleEvents.length}</span></div>
-        <div className="timeline" aria-live="polite">{visibleEvents.map((event) => {
+        <label className="activity-filter">프로젝트별 보기<select aria-label="활동 프로젝트" value={activityProject} onChange={(event) => setActivityProject(event.target.value)}><option value="all">전체 프로젝트</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
+        {detailCaptureEnabled && <span className="detail-capture-badge">로컬 상세 기록 켜짐</span>}
+        <div className="timeline" aria-live="polite">{visibleEvents.length ? visibleEvents.map((event) => {
           const project = projects.find((item) => item.id === event.projectId) ?? projects[0];
           const Icon = event.type === "employee.approval.waiting" || ["visual_check", "validation"].includes(event.activityCategory) ? ShieldCheck : event.activityCategory === "code_change" ? Code : event.activityCategory === "research" ? MagnifyingGlass : event.activityCategory === "coordination" || ["employee.completed", "employee.work.completed"].includes(event.type) ? Handshake : ["planning", "document_work", "environment_setup", "automation"].includes(event.activityCategory) || event.type === "directive.submitted" ? CheckCircle : Clock;
           const duration = activityDuration(event);
           const detail = event.activityLabel ? `${event.employeeName} · ${event.activityLabel}${event.stepCount > 1 ? ` · ${event.stepCount}개 세부 단계` : ""}` : event.employeeName ?? "AI 직원";
-          return <article className="timeline-item" key={event.id}><span className="timeline-item__icon" style={{ "--event-color": project?.color ?? palette[0] }}><Icon size={17} weight="duotone" /></span><div><div className="timeline-item__meta"><span>{project?.shortName ?? "프로젝트"}</span><time>{duration ? `${duration} · ` : ""}{relativeTime(event.at, now)}</time></div><p>{event.message}</p><small>{detail}</small></div></article>;
-        })}</div>
+          return <article className="timeline-item" key={event.id}><span className="timeline-item__icon" style={{ "--event-color": project?.color ?? palette[0] }}><Icon size={17} weight="duotone" /></span><div><div className="timeline-item__meta"><span>{project?.shortName ?? "프로젝트"}</span><time>{duration ? `${duration} · ` : ""}{relativeTime(event.at, now)}</time></div><p>{event.message}</p>{event.detail && <blockquote className="timeline-item__detail">{event.detail}</blockquote>}<small>{detail}</small></div></article>;
+        }) : <div className="timeline-empty">이 프로젝트의 최근 업무 활동이 없습니다.</div>}</div>
         <div className="activity-panel__footer"><span><Clock size={15} /> 세부 작업을 10분 흐름으로 요약</span><span>{source === "live" ? "로컬 API 연결됨" : source === "demo" ? "이벤트 파일 비어 있음 · DEMO" : "재연결 시도 중"}</span></div>
       </aside>
     </section>

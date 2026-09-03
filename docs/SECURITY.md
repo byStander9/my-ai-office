@@ -8,7 +8,7 @@
 - Agent role and tool name when supplied by Codex
 - Derived state such as working, collaborating, waiting, idle, or stale
 
-## Never collected by the packaged sink
+## Default collection boundary
 
 - Prompt text
 - Shell commands
@@ -18,7 +18,20 @@
 - Full working-directory paths
 - Raw session, turn, worker, or tool-use identifiers
 
-The sink catches all internal errors and exits successfully so observability cannot block a Codex task. Local event files rotate at 20 MiB and are excluded from source control.
+## Local detailed activity opt-in
+
+Detailed activity is disabled by default. When `captureDetails` is explicitly enabled in the local settings file, the sink may additionally persist:
+
+- A short, redacted `UserPromptSubmit.prompt` as a user directive
+- A short, redacted `tool_input.message` from the allowlisted subagent collaboration tools only
+
+The sink still never stores shell or patch input, arbitrary tool input or output, `tool_response`, transcript paths/content, or `last_assistant_message`. It removes common token patterns, authorization values, email addresses, and absolute paths before persistence; the Node API repeats that redaction. Redaction is best effort and cannot prove that every sensitive value was removed.
+
+The UI shows a local-detail badge while recent events confirm that capture is enabled. Discussion text is returned inside a project only while at least two subagents are actively collaborating. Anyone who can reach the local service, including an allowed Tailscale peer, can read displayed details.
+
+The Windows installer exposes `-EnableDetailedActivity` and `-DisableDetailedActivity`; using neither preserves the prior setting. `AI_OFFICE_CAPTURE_DETAILS=1` is a process-level override. Disabling capture affects future events only: already persisted details remain until the 20 MiB event-file rotation or explicit removal with the uninstall data option.
+
+The sink catches all internal errors and exits successfully so observability cannot block a Codex task. Local event files and settings rotate or remain outside the repository and are excluded from source control.
 
 ## Display metadata
 

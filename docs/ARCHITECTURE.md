@@ -28,6 +28,10 @@ flowchart LR
 - Main employee identity is derived from the session or project key.
 - Subagent identity is derived from the already-hashed employee source ID.
 - Two or more active employees in one project become `meeting`.
+- A project is returned only after a tool, subagent, or approval event proves Codex work; lifecycle-only chats are omitted.
+- Projects are hidden after 24 hours without activity and automatically return on later work.
+- The activity panel owns a project filter separate from the office-map filter.
+- Optional details are captured only from redacted user directives and allowlisted collaboration messages. Project discussion is returned only when at least two subagents collaborate.
 - `turn.stopping` becomes idle after a two-second quiet interval.
 - A snapshot becomes stale after five minutes without a new event.
 - The API returns at most the 80 most recent activities and reads at most 50,000 source events.

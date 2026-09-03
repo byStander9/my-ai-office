@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param(
-    [switch]$SkipStart
+    [switch]$SkipStart,
+    [switch]$EnableDetailedActivity,
+    [switch]$DisableDetailedActivity
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,6 +14,10 @@ $vbsPath = Join-Path $projectRoot "server\start-dashboard-hidden.vbs"
 $startupDir = [Environment]::GetFolderPath("Startup")
 $shortcutPath = Join-Path $startupDir "My AI Office Dashboard.lnk"
 $wscriptPath = Join-Path $env:WINDIR "System32\wscript.exe"
+
+if ($EnableDetailedActivity -and $DisableDetailedActivity) {
+    throw "Choose either -EnableDetailedActivity or -DisableDetailedActivity, not both."
+}
 
 foreach ($command in @("node", "npm", "py")) {
     if (-not (Get-Command $command -ErrorAction SilentlyContinue)) {
@@ -33,6 +39,12 @@ try {
 
 New-Item -ItemType Directory -Path $codexOfficeDir -Force | Out-Null
 Copy-Item -LiteralPath $sinkSource -Destination $sinkTarget -Force
+if ($EnableDetailedActivity -or $DisableDetailedActivity) {
+    $settingsPath = Join-Path $codexOfficeDir "settings.json"
+    $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
+    $captureDetails = if ($EnableDetailedActivity) { 'true' } else { 'false' }
+    [System.IO.File]::WriteAllText($settingsPath, "{`"captureDetails`":$captureDetails}", $utf8WithoutBom)
+}
 & node (Join-Path $projectRoot "scripts\configure-codex-hooks.mjs") install
 if ($LASTEXITCODE -ne 0) { throw "Codex hook installation failed." }
 
