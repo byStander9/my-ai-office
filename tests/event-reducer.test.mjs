@@ -336,3 +336,127 @@ test("returns redacted details and discussions only for two active subagents", (
   assert.match(twoSubagents.projects[0].discussions[0].employeeId, /^emp-[a-f0-9]{12}$/);
   assert.equal(JSON.stringify(twoSubagents).includes("agent-a"), false);
 });
+
+test("links Korean CEO instructions to assignments, work stages, and collaboration without opaque text", () => {
+  const snapshot = reduceEvents([
+    event({
+      id: "directive",
+      type: "directive.submitted",
+      detailKind: "directive",
+      detail: "<in-app-browser-context>ambient state</in-app-browser-context> ## My request: CI 오류 원인을 확인하고 수정한 뒤 다시 검증해줘.",
+      detailCapture: true,
+      appendSeq: 1,
+    }),
+    event({
+      id: "assignment",
+      type: "employee.tool.started",
+      tool: "collaboration_spawn_agent",
+      detailKind: "discussion",
+      detail: "Objective: audit dashboard identifiers and English labels.",
+      assignmentEmployeeName: "리서치 담당",
+      assignmentTask: "대시보드 화면의 영문과 내부 식별자를 조사합니다.",
+      detailCapture: true,
+      appendSeq: 2,
+    }),
+    event({ id: "sub-a", type: "employee.started", employeeId: "agent-a", employeeRole: "office_researcher", appendSeq: 3 }),
+    event({ id: "sub-b", type: "employee.started", employeeId: "agent-b", employeeRole: "office_reviewer", appendSeq: 4 }),
+    event({
+      id: "talk-a",
+      type: "employee.tool.started",
+      employeeId: "agent-a",
+      employeeRole: "office_researcher",
+      tool: "collaboration_send_message",
+      detailKind: "discussion",
+      detail: "Review the CI test and dashboard display.",
+      detailCapture: true,
+      appendSeq: 5,
+    }),
+    event({
+      id: "talk-b",
+      type: "employee.tool.started",
+      employeeId: "agent-b",
+      employeeRole: "office_reviewer",
+      tool: "collaboration_send_message",
+      detailKind: "discussion",
+      detail: `gAAAAA${"B".repeat(80)}`,
+      detailCapture: true,
+      appendSeq: 6,
+    }),
+    event({ id: "work", type: "employee.tool.started", employeeId: "agent-a", employeeRole: "office_researcher", tool: "web_search", toolUseId: "tool-work", appendSeq: 7 }),
+    event({
+      id: "handoff",
+      type: "employee.completed",
+      status: "completed",
+      employeeId: "agent-c",
+      employeeRole: "office_verifier",
+      detailKind: "handoff",
+      detail: "Completed CI tests and dashboard validation.",
+      detailCapture: true,
+      appendSeq: 8,
+    }),
+  ], { now: new Date("2026-08-26T06:00:01.000Z") });
+
+  const project = snapshot.projects[0];
+  assert.match(project.currentDirective.title, /CI 오류 원인/);
+  assert.equal(project.assignments[0].employeeName, "리서치 담당");
+  assert.match(project.assignments[0].task, /대시보드 화면의 영문과 내부 식별자/);
+  assert.equal(project.discussions.length, 2);
+  assert.ok(project.discussions.every((discussion) => /[가-힣]/.test(discussion.message)));
+  const research = snapshot.events.find((item) => item.activityCategory === "research");
+  assert.match(research.message, /CI 오류 원인/);
+  assert.equal(research.workStage, "2단계 · 자료와 현황 조사");
+  const handoff = snapshot.events.find((item) => item.detailKind === "handoff");
+  assert.equal(handoff.workStage, "5단계 · 결과 정리와 인계");
+  assert.match(handoff.detail, /CI 자동 검사·테스트와 결과 검증·대시보드 화면/);
+
+  const serialized = JSON.stringify(snapshot);
+  for (const forbidden of ["ambient state", "Objective:", "audit dashboard", "Review the CI", "Completed CI", "gAAAAA", "collaboration_spawn_agent", "collaboration_send_message", "tool-work", "agent-a"]) {
+    assert.equal(serialized.includes(forbidden), false, `exposed ${forbidden}`);
+  }
+});
+
+test("keeps work summaries, assignments, and discussions separated by CEO directive", () => {
+  const snapshot = reduceEvents([
+    event({ id: "directive-a", type: "directive.submitted", detailKind: "directive", detail: "로그인 오류를 조사해줘.", detailCapture: true, appendSeq: 1 }),
+    event({ id: "assignment-a", type: "employee.tool.started", tool: "collaboration_spawn_agent", detailKind: "assignment", detail: "로그인 오류 재현 조건을 조사합니다.", assignmentEmployeeName: "리서치 담당", assignmentTask: "로그인 오류 재현 조건 조사", detailCapture: true, appendSeq: 2 }),
+    event({ id: "work-a", at: "2026-08-26T06:01:00.000Z", type: "employee.tool.started", tool: "exec_command", toolUseId: "tool-a", appendSeq: 3 }),
+    event({ id: "directive-b", at: "2026-08-26T06:02:00.000Z", type: "directive.submitted", detailKind: "directive", detail: "결제 화면을 수정해줘.", detailCapture: true, appendSeq: 4 }),
+    event({ id: "assignment-b", at: "2026-08-26T06:02:10.000Z", type: "employee.tool.started", tool: "collaboration_spawn_agent", detailKind: "assignment", detail: "결제 화면의 버튼 배치를 검증합니다.", assignmentEmployeeName: "화면 검증 담당", assignmentTask: "결제 화면 버튼 배치 검증", detailCapture: true, appendSeq: 5 }),
+    event({ id: "work-b", at: "2026-08-26T06:03:00.000Z", type: "employee.tool.started", tool: "exec_command", toolUseId: "tool-b", appendSeq: 6 }),
+  ], { now: new Date("2026-08-26T06:03:01.000Z") });
+
+  const summaries = snapshot.events.filter((item) => item.type === "activity.summary");
+  assert.equal(summaries.length, 2);
+  assert.match(summaries.find((item) => item.instructionTitle.includes("로그인"))?.message ?? "", /로그인 오류/);
+  assert.match(summaries.find((item) => item.instructionTitle.includes("결제"))?.message ?? "", /결제 화면/);
+  assert.equal(snapshot.projects[0].assignments.length, 1);
+  assert.match(snapshot.projects[0].assignments[0].task, /결제 화면/);
+  assert.equal(snapshot.projects[0].assignments[0].employeeName, "화면 검증 담당");
+});
+
+test("converts mixed Korean and English commands into a Korean-safe display summary", () => {
+  const clean = sanitizeEvent(event({
+    detailKind: "directive",
+    detail: "한국어 지시입니다. Run npm test -- --reporter=spec with token=hello-world.",
+    detailCapture: true,
+  }));
+  assert.match(clean.detail, /[가-힣]/);
+  for (const forbidden of ["Run npm", "reporter", "hello-world", "token="]) {
+    assert.equal(clean.detail.includes(forbidden), false, `exposed ${forbidden}`);
+  }
+});
+
+test("normalizes legacy markup and referenced-chat placeholders into readable Korean", () => {
+  const markedUp = sanitizeEvent(event({
+    detailKind: "directive",
+    detail: '<사용자 지시사항"대시보드 화면에 관한 지시사항"> 사용자 지시사항, 사용자 지시사항',
+    detailCapture: true,
+  }));
+  const referenced = sanitizeEvent(event({
+    detailKind: "directive",
+    detail: "Referenced ChatGPT conversation: encrypted payload",
+    detailCapture: true,
+  }));
+  assert.equal(markedUp.detail, "사용자 지시사항");
+  assert.equal(referenced.detail, "이전 대화에서 이어진 작업 지시");
+});
